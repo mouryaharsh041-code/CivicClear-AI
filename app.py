@@ -283,40 +283,38 @@ st.markdown("""
         background: #E55A52 !important;
     }
 
-    /* 6. SIDEBAR COLLAPSE BUTTON (Glowing Coral Circle Reopen Button) */
+    /* 6. STANDARD HEADER & SIDEBAR TOGGLE (Highly visible) */
     header[data-testid="stHeader"] {
         background-color: #FCFBF9 !important;
         visibility: visible !important;
         height: auto !important;
-        min-height: 0 !important;
-        padding: 0 !important;
+        padding: 0 1rem !important;
         border-bottom: 1px solid #E5E7EB !important;
     }
+
+    /* Keep all elements in the header visible (the app title, and the toggle button) */
     header[data-testid="stHeader"] > * {
-        visibility: hidden !important;
-    }
-    header[data-testid="stHeader"] button[data-testid="stSidebarCollapseButton"],
-    header[data-testid="stHeader"] button[data-testid="stSidebarCollapseButton"] * {
         visibility: visible !important;
-        display: flex !important;
+    }
+
+    /* Style the standard sidebar collapse/expand button to be big, coral, and glowing */
+    button[data-testid="stSidebarCollapseButton"] {
         background-color: #FF6B6B !important;
         color: white !important;
         border: none !important;
         border-radius: 50% !important;
-        width: 64px !important;
-        height: 64px !important;
-        box-shadow: 0 0 18px rgba(255, 107, 107, 0.7) !important;
-        position: absolute !important;
-        left: 10px !important;
-        top: 80px !important;
-        z-index: 99999 !important;
-        transition: all 0.3s ease !important;
+        width: 48px !important;
+        height: 48px !important;
+        box-shadow: 0 0 12px rgba(255, 107, 107, 0.5) !important;
+        margin-top: 10px !important;
+        margin-bottom: 10px !important;
     }
-    header[data-testid="stHeader"] button[data-testid="stSidebarCollapseButton"] svg {
+
+    button[data-testid="stSidebarCollapseButton"] svg {
         stroke: #FFFFFF !important;
         fill: #FFFFFF !important;
-        width: 32px !important;
-        height: 32px !important;
+        width: 24px !important;
+        height: 24px !important;
     }
 
     /* 7. FORCE DROPDOWN ARROWS & EYE ICONS TO BE DARK CHARCOAL */
