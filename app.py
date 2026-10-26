@@ -66,6 +66,10 @@ EN = {
     "confirm_delete_msg": "Are you sure you want to delete this notice? This action cannot be undone.",
     "btn_yes": "Yes, Delete",
     "btn_cancel": "Cancel",
+    "helper_title": "Get 100% Free API Keys:",
+    "helper_openrouter": "OpenRouter (Primary)",
+    "helper_gemini": "Google Gemini (Backup)",
+    "helper_note": "*Both tiers are completely free. No credit card required.*",
 }
 
 HI = {
@@ -117,6 +121,10 @@ HI = {
     "confirm_delete_msg": "क्या आप वाकई इस नोटिस को हटाना चाहते हैं? यह कार्रवाई वापस नहीं ली जा सकती।",
     "btn_yes": "हाँ, हटाएँ",
     "btn_cancel": "रद्द करें",
+    "helper_title": "100% निःशुल्क एपीआई कुंजियाँ प्राप्त करें:",
+    "helper_openrouter": "ओपनराउटर (प्राथमिक)",
+    "helper_gemini": "गूगल जेमिनी (बैकअप)",
+    "helper_note": "*दोनों स्तर पूरी तरह निःशुल्क हैं। क्रेडिट कार्ड की आवश्यकता नहीं है।*",
 }
 
 # =========================================================
@@ -693,19 +701,19 @@ with st.sidebar:
     
     # 🟢 HELPER LINKS SECTION (Crucial for the "Bring Your Own Key" strategy)
     st.markdown(
-        """
+        f"""
         <div style="background-color: #FFFFFF; padding: 12px; border-radius: 8px; border: 1px solid #E5E7EB; margin-top: 10px;">
             <p style="font-size: 0.8rem; font-weight: 700; color: #1F2937; margin-bottom: 8px;">
-                🟢 Get 100% Free API Keys:
+                🟢 {L['helper_title']}
             </p>
             <a href="https://openrouter.ai/keys" target="_blank" style="text-decoration: none; color: #FF6B6B; font-weight: 600; font-size: 0.8rem; display: block; margin-bottom: 6px;">
-                ➡️ OpenRouter (Primary)
+                ➡️ {L['helper_openrouter']}
             </a>
             <a href="https://aistudio.google.com/apikey" target="_blank" style="text-decoration: none; color: #FF6B6B; font-weight: 600; font-size: 0.8rem; display: block;">
-                ➡️ Google Gemini (Backup)
+                ➡️ {L['helper_gemini']}
             </a>
             <p style="font-size: 0.7rem; color: #6B7280; margin-top: 8px; margin-bottom: 0;">
-                *Both tiers are completely free. No credit card required.*
+                {L['helper_note']}
             </p>
         </div>
         """,
