@@ -1,0 +1,135 @@
+import requests
+import streamlit as st
+from hashlib import md5
+from datetime import date, datetime, timedelta
+
+# Load keys from Streamlit Secrets (We will set these up in Step 3)
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+}
+
+# =========================================================
+# === CORE DATABASE OPERATIONS (REST API) ===
+# =========================================================
+def save_notice(title, summary, deadline_date_str, raw_result):
+    session_id = st.session_state.session_id
+    raw_hash = md5(raw_result.encode('utf-8')).hexdigest()
+    
+    # Check for duplicates for the current user
+    check_url = f"{SUPABASE_URL}/rest/v1/notices?session_id=eq.{session_id}&raw_hash=eq.{raw_hash}"
+    check_res = requests.get(check_url, headers=HEADERS)
+    if check_res.json():
+        return False
+        
+    payload = {
+        "session_id": session_id,
+        "title": title,
+        "summary": summary,
+        "deadline_date": deadline_date_str,
+        "raw_result": raw_result,
+        "raw_hash": raw_hash,
+        "is_important": 0
+    }
+    
+    res = requests.post(f"{SUPABASE_URL}/rest/v1/notices", headers=HEADERS, json=payload)
+    return res.status_code == 201
+
+def get_active_notices():
+    session_id = st.session_state.session_id
+    today = date.today().isoformat()
+    url = f"{SUPABASE_URL}/rest/v1/notices?session_id=eq.{session_id}&deadline_date=gte.{today}&order=deadline_date.asc"
+    res = requests.get(url, headers=HEADERS)
+    return res.json()
+
+def get_approaching_notices(days_threshold=3):
+    session_id = st.session_state.session_id
+    today = date.today()
+    future_date = (today + timedelta(days=days_threshold)).isoformat()
+    today_iso = today.isoformat()
+    
+    url = f"{SUPABASE_URL}/rest/v1/notices?session_id=eq.{session_id}&deadline_date=gte.{today_iso}&deadline_date=lte.{future_date}&order=deadline_date.asc"
+    res = requests.get(url, headers=HEADERS)
+    return res.json()
+
+def get_expired_notices():
+    session_id = st.session_state.session_id
+    today = date.today().isoformat()
+    url = f"{SUPABASE_URL}/rest/v1/notices?session_id=eq.{session_id}&deadline_date=lt.{today}&order=deadline_date.desc"
+    res = requests.get(url, headers=HEADERS)
+    return res.json()
+
+def get_important_notices():
+    session_id = st.session_state.session_id
+    url = f"{SUPABASE_URL}/rest/v1/notices?session_id=eq.{session_id}&is_important=eq.1&order=deadline_date.asc"
+    res = requests.get(url, headers=HEADERS)
+    return res.json()
+
+def delete_notice(notice_id):
+    url = f"{SUPABASE_URL}/rest/v1/notices?id=eq.{notice_id}"
+    res = requests.delete(url, headers=HEADERS)
+    return res.status_code == 204
+
+def toggle_importance(notice_id, current_status):
+    new_status = 0 if current_status == 1 else 1
+    url = f"{SUPABASE_URL}/rest/v1/notices?id=eq.{notice_id}"
+    payload = {"is_important": new_status}
+    res = requests.patch(url, headers=HEADERS, json=payload)
+    return res.status_code == 200
+
+# =========================================================
+# === DATE PARSING HELPER (Same as your original logic) ===
+# =========================================================
+def parse_deadline_date(text):
+    """Robust regex-based date parser (copied from your original db.py)."""
+    if not text:
+        return None
+    
+    text_clean = text.strip()
+    first_line = text_clean.split('\n')[0].strip()
+    for fmt in ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(first_line, fmt).date()
+        except ValueError:
+            continue
+
+    month_map = {
+        'jan': '01', 'feb': '02', 'mar': '3', 'apr': '04', 'may': '05', 'jun': '06',
+        'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12',
+        'january': '01', 'february': '02', 'march': '03', 'april': '04', 'june': '06',
+        'july': '07', 'august': '08', 'september': '09', 'october': '10', 'november': '11', 'december': '12'
+    }
+    
+    import re
+    match = re.search(r'\b(\d{1,2})\s+([a-zA-Z]{3,})\s+(\d{4})\b', text_clean)
+    if match:
+        day = match.group(1).zfill(2)
+        month_word = match.group(2).lower()
+        year = match.group(3)
+        month = month_map.get(month_word)
+        if month:
+            try:
+                return datetime.strptime(f"{year}-{month}-{day}", "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
+    match = re.search(r'\b(\d{4})-(\d{2})-(\d{2})\b', text_clean)
+    if match:
+        try:
+            return datetime.strptime(match.group(0), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+    match = re.search(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', text_clean)
+    if match:
+        try:
+            return datetime.strptime(match.group(0), "%d/%m/%Y").date()
+        except ValueError:
+            pass
+
+    return None
