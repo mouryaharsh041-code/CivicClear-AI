@@ -203,6 +203,12 @@ st.markdown("""
         padding: 1rem !important;
         border-radius: 12px !important;
     }
+
+    /* RECURSIVE OVERRIDE: Force ALL nested child divs inside the dropzone to be white */
+    div[data-testid="stFileUploaderDropzone"] div {
+        background-color: #FFFFFF !important;
+        background: #FFFFFF !important;
+    }
     
     /* Force ALL text, labels, metadata, and placeholders inside the dropzone to be dark charcoal */
     div[data-testid="stFileUploaderDropzone"] p,
