@@ -473,6 +473,51 @@ def translate_date_to_hindi(date_str):
         return date_str
 
 # =========================================================
+# === DYNAMIC MODEL SELECTION HELPER ===
+# =========================================================
+def get_best_openrouter_model(api_key, supports_image=False):
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=10)
+        if resp.status_code == 200:
+            models = resp.json().get('data', [])
+            candidates = []
+            for m in models:
+                mid = m.get('id', '')
+                pricing = m.get('pricing', {})
+                is_free = float(pricing.get('prompt', 1)) == 0.0 and float(pricing.get('completion', 1)) == 0.0
+                arch = m.get('architecture', {})
+                modalities = arch.get('modalities', [])
+                supports_img = 'image' in modalities or 'vision' in mid.lower() or 'vl' in mid.lower() or 'gemini' in mid.lower()
+                
+                if is_free:
+                    if supports_image and not supports_img:
+                        continue
+                    candidates.append(mid)
+            
+            # Prioritize some known good ones if they exist, otherwise pick the first available
+            priorities = [
+                "google/gemini-2.0-flash-lite-001:free",
+                "google/gemini-2.0-flash-exp:free",
+                "google/gemini-flash-1.5:free",
+                "qwen/qwen-2.5-vl-72b-instruct:free",
+                "nvidia/nemotron-3.5-super-vl:free",
+                "meta-llama/llama-3.2-11b-vision-instruct:free",
+            ]
+            for p in priorities:
+                if p in candidates:
+                    return p
+            if candidates:
+                return candidates[0]
+    except Exception as e:
+        print(f"Dynamic model selection error: {e}")
+    # Fallback defaults (only if API fails completely)
+    return "google/gemini-2.0-flash-lite-001:free" if supports_image else "meta-llama/llama-3.2-11b-vision-instruct:free"
+
+# =========================================================
 # === DETERMINISTIC PROMPTS ===
 # =========================================================
 def build_ocr_prompt():
@@ -661,8 +706,10 @@ def analyze_notice():
                 "HTTP-Referer": "https://civicclear-ai.streamlit.app",
                 "X-Title": "CivicClear AI"
             }
+            # Dynamically select model (no hardcoding!)
+            model_to_use = get_best_openrouter_model(openrouter_key, supports_image=False)
             payload = {
-                "model": "meta-llama/llama-3.2-11b-vision-instruct", 
+                "model": model_to_use, 
                 "max_tokens": 2048,
                 "messages": [{"role":"user","content": build_structured_extraction_prompt(raw_text)}]
             }
@@ -706,8 +753,10 @@ def analyze_notice():
                     "HTTP-Referer": "https://civicclear-ai.streamlit.app",
                     "X-Title": "CivicClear AI"
                 }
+                # Dynamically select model (no hardcoding!)
+                model_to_use_trans = get_best_openrouter_model(openrouter_key, supports_image=False)
                 payload = {
-                    "model": "meta-llama/llama-3.2-11b-vision-instruct", 
+                    "model": model_to_use_trans, 
                     "max_tokens": 2048,
                     "messages": [{"role":"user","content": build_translation_prompt(en_structured)}]
                 }
