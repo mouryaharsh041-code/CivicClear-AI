@@ -479,6 +479,9 @@ def build_prompt(selected_lang):
     if selected_lang == "Hindi":
         return """आप एक विशेषज्ग भाषा अनुवादक और कानूनी विश्लेषक हैं। इस नोटिस का विश्लेषण करें और इसका पूरा विवरण केवल और केवल शुद्ध, स्वाभाविक हिंदी में दें।
 
+महत्वपूर्ण नियम (CRITICAL RULE):
+चेकलिस्ट (CHECKLIST) बनाते समय, कृपया नोटिस में दिए गए हर एक छोटे-मोटे कदम को अलग-अलग बिंदु पर लिखें। कभी भी कई कदमों को मत मिलाएं (जैसे फीस भरना और फॉर्म जमा करना अलग-अलग चरण हैं)। नोटिस में जितने कदम होंगे, उतने ही हिंदी में बिंदु बनाएं। बिंदुओं की संख्या को बाधित न करें—बस जितने कदम नोटिस में हैं, उतने ही बिंदु लिखें ताकि यूजर को समझने में कोई कठिनता न हो।
+
 सूचना: अगर कोई डेडलाइन नोटिस में स्पष्ट रूप से नहीं दी गई है, तो DEADLINE के लिए "Not specified" लिखें। अन्यथा तिथि को अंग्रेजी में लिखें जैसे "25 October 2026"।
 
 FORMAT:
@@ -491,6 +494,8 @@ DEADLINE:
 CHECKLIST:
 [चरण 1]
 [चरण 2]
+[चरण 3]
+... (नोटिस के अनुसार सभी चरण यहाँ लिखें)
 
 NOTE:
 [चेतावनी/शुल्क]"""
@@ -856,7 +861,6 @@ with tab_analyze:
                 st.session_state.pdf_text = None
                 st.rerun()
         with col_btn:
-            # Always show the analyze button if there is an image, but change label if already analyzed
             btn_label = L["btn_analyze"] if not st.session_state.raw_result else L["btn_analyze"] + " (Re-analyze)"
             if st.button(btn_label, use_container_width=True, type="primary"):
                 analyze_notice()
