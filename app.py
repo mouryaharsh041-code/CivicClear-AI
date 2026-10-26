@@ -242,27 +242,40 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* 4. TABS STYLING */
+    /* 4. TABS STYLING (Floating Hover Effect) */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        border-bottom: 1px solid #E5E7EB;
-        padding-bottom: 2px;
+        gap: 12px;
+        border-bottom: none !important; /* Removes the bottom line to make it look floating */
+        padding-bottom: 8px;
         background-color: transparent !important;
+        align-items: flex-end;
     }
     .stTabs [data-baseweb="tab"] {
         background-color: #FFFFFF !important;
         color: #4B5563 !important;
         font-weight: 600 !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         padding: 10px 18px !important;
         min-width: 130px !important;
         white-space: nowrap !important;
         border: 1px solid #E5E7EB !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); /* Smooth animation */
+        position: relative;
+    }
+    /* HOVER FLOAT EFFECT: Lifts the tab up and adds a stronger shadow */
+    .stTabs [data-baseweb="tab"]:hover {
+        transform: translateY(-4px); /* Lifts the tab up by 4 pixels */
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12) !important; /* Lifted shadow */
+        border-color: #FF6B6B !important; /* Coral border on hover */
+        z-index: 10;
     }
     .stTabs [aria-selected="true"] {
-        background-color: rgba(255, 107, 107, 0.1) !important;
+        background-color: #FFFFFF !important;
         color: #FF6B6B !important;
-        border-color: rgba(255, 107, 107, 0.3) !important;
+        border-color: #FF6B6B !important;
+        box-shadow: 0 4px 10px rgba(255, 107, 107, 0.2);
+        transform: translateY(-2px); /* Keep the active tab slightly lifted for a modern look */
     }
 
     /* 5. CARDS & METRICS */
