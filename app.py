@@ -472,34 +472,52 @@ def translate_date_to_hindi(date_str):
     except:
         return date_str
 
-# --- PROMPTS & HELPERS ---
-def build_extraction_prompt():
-    """Canonical English extraction prompt (source of truth)."""
-    return """Analyze this official notice and extract details. Return STRICTLY in this format:
+# =========================================================
+# === DETERMINISTIC PROMPTS ===
+# =========================================================
+def build_ocr_prompt():
+    """Extract all raw text from the document image/PDF."""
+    return """Extract ALL text from this document exactly as it is written. 
+Preserve paragraph breaks. Do not summarize, translate, or omit any text."""
 
+def build_structured_extraction_prompt(raw_text):
+    """Extract structured fields from raw text deterministically."""
+    return f"""From the following raw text of a government notice, extract the following fields:
+
+1. SUMMARY: A 2-3 sentence summary of the notice.
+2. DEADLINE: The main deadline date (e.g., "15 November 2026"). If multiple dates exist, extract the final deadline.
+3. CHECKLIST: Extract EVERY single action step as a numbered list. Do not merge steps. If a step has sub-steps, list them separately.
+4. NOTE: Any penalty, fee, or warning.
+
+RAW TEXT:
+{raw_text}
+
+Return STRICTLY in this format:
 SUMMARY:
-[2-3 sentence summary]
+[summary]
 
 DEADLINE:
-[Main deadline date, e.g., 25 October 2026]
+[date]
 
 CHECKLIST:
-[Action steps, each on a new line. Extract every single minor step individually without merging any.]
+1. [step 1]
+2. [step 2]
+...
 
 NOTE:
-[Penalty, fee, or warning]"""
+[penalty/warning]"""
 
-def build_translation_prompt(en_raw_text):
-    """Prompt to translate the English extracted text to Hindi while preserving structure."""
-    return f"""Translate the following extracted notice details from English into natural, formal Hindi (used in official government communications in India).
+def build_translation_prompt(en_structured_text):
+    """Translate the structured English text to Hindi, preserving the numbered checklist."""
+    return f"""Translate the following structured notice details from English into formal Hindi.
 
 CRITICAL RULES:
 - Translate the SUMMARY, DEADLINE, CHECKLIST, and NOTE sections.
-- **DO NOT MERGE OR SUMMARIZE THE CHECKLIST ITEMS.** You must translate *every single bullet point* exactly as it is written, keeping the exact same number of bullet points.
-- Keep the exact same formatting structure (SUMMARY, DEADLINE, CHECKLIST, NOTE).
+- **DO NOT MERGE OR REORDER THE CHECKLIST ITEMS.** Translate each numbered item exactly as written, keeping the exact same numbering (1, 2, 3...).
+- Keep the exact same formatting structure.
 
-English Text to translate:
-{en_raw_text}"""
+English Text:
+{en_structured_text}"""
 
 def clean_text_for_tts(text, lang):
     text = re.sub(r'[\#\*\_\~\`\|\<\>]', ' ', text)
@@ -549,7 +567,9 @@ def get_available_gemini_models(api_key):
     except: pass
     return ["gemini-2.0-flash","gemini-1.5-flash"]
 
-# --- CORE ANALYSIS ---
+# =========================================================
+# === CORE ANALYSIS PIPELINE ===
+# =========================================================
 def analyze_notice():
     if st.session_state.pil_image is None and st.session_state.pdf_text is None:
         st.error(L["upload_first"])
@@ -562,38 +582,38 @@ def analyze_notice():
         return
 
     img_b64 = st.session_state.img_base64
-    raw_result_en = None  # Canonical English result
+    raw_text = None
     used_model = None
 
-    # Step 1: Always extract in English first
+    # Step 1: Extract raw text from the image/PDF
     with st.status(L["analyzing"], expanded=True) as status:
-        status.update(label="Extracting canonical English structure...")
+        status.update(label="Extracting raw text from document...")
         if openrouter_key:
             headers = {"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"}
-            content_payload = [{"type": "text", "text": build_extraction_prompt()}]
+            content_payload = [{"type": "text", "text": build_ocr_prompt()}]
             if st.session_state.pdf_text:
-                content_payload[0]["text"] = f"Analyze the following notice text:\n\n{st.session_state.pdf_text}\n\n{build_extraction_prompt()}"
+                content_payload[0]["text"] = f"Extract all text from this PDF:\n\n{st.session_state.pdf_text}"
             else:
                 content_payload.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
 
             for model in get_active_free_vision_models():
-                payload = {"model": model, "max_tokens": 2048,
+                payload = {"model": model, "max_tokens": 4096,
                            "messages": [{"role":"user","content": content_payload}]}
                 try:
                     r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                     if r.status_code == 200:
                         c = r.json()['choices'][0]['message']['content']
-                        if c and len(c.strip()) > 10:
-                            raw_result_en = c; used_model = f"OpenRouter ({model})"; break
+                        if c and len(c.strip()) > 50:
+                            raw_text = c; used_model = f"OpenRouter ({model})"; break
                 except: continue
 
-        if not raw_result_en and gemini_key:
+        if not raw_text and gemini_key:
             models = get_available_gemini_models(gemini_key)
             for m in models:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
-                content_parts = [{"text": build_extraction_prompt()}]
+                content_parts = [{"text": build_ocr_prompt()}]
                 if st.session_state.pdf_text:
-                    content_parts.insert(0, {"text": f"Notice text to analyze:\n{st.session_state.pdf_text}\n\n"})
+                    content_parts.insert(0, {"text": f"Extract all text from this PDF:\n\n{st.session_state.pdf_text}"})
                 else:
                     content_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
                 payload = {"contents":[{"parts": content_parts}]}
@@ -601,50 +621,77 @@ def analyze_notice():
                     r = requests.post(url, json=payload, timeout=30)
                     if r.status_code == 200:
                         c = r.json()['candidates'][0]['content']['parts'][0]['text']
-                        if c and len(c.strip()) > 10:
-                            raw_result_en = c; used_model = f"Gemini ({m})"; break
+                        if c and len(c.strip()) > 50:
+                            raw_text = c; used_model = f"Gemini ({m})"; break
                 except: continue
 
-        if raw_result_en:
-            status.update(label=f"Extraction complete via {used_model}", state="complete")
+        if raw_text:
+            status.update(label=f"Text extraction complete via {used_model}", state="complete")
         else:
-            status.update(label=L["all_fail"], state="error")
+            status.update(label="Failed to extract text", state="error")
+            return
 
-    # Step 2: Translate to Hindi if target language is Hindi
-    final_raw_result = raw_result_en
-    if raw_result_en and current_lang == "Hindi":
+    # Step 2: Extract structured fields from raw text
+    en_structured = None
+    with st.status("Extracting structured fields...", expanded=True) as status:
+        headers = {"Authorization": f"Bearer {openrouter_key or gemini_key}", "Content-Type": "application/json"}
+        payload = {"model": "meta-llama/llama-3.2-11b-vision-instruct", "max_tokens": 2048,
+                   "messages": [{"role":"user","content": build_structured_extraction_prompt(raw_text)}]}
+        try:
+            r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
+            if r.status_code == 200:
+                en_structured = r.json()['choices'][0]['message']['content']
+                status.update(label="Structured extraction complete", state="complete")
+            else:
+                status.update(label="Structured extraction failed", state="error")
+        except Exception as e:
+            status.update(label=f"Error: {e}", state="error")
+
+    # Step 3: Translate to Hindi if needed
+    final_result = en_structured
+    if en_structured and current_lang == "Hindi":
         with st.status("Translating to Hindi (preserving structure)...", expanded=True) as trans_status:
             try:
                 headers = {"Authorization": f"Bearer {openrouter_key or gemini_key}", "Content-Type": "application/json"}
                 payload = {"model": "meta-llama/llama-3.2-11b-vision-instruct", "max_tokens": 2048,
-                           "messages": [{"role":"user","content": build_translation_prompt(raw_result_en)}]}
+                           "messages": [{"role":"user","content": build_translation_prompt(en_structured)}]}
                 r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                 if r.status_code == 200:
-                    final_raw_result = r.json()['choices'][0]['message']['content']
+                    final_result = r.json()['choices'][0]['message']['content']
                     trans_status.update(label="Translation complete!", state="complete")
                 else:
                     trans_status.update(label="Translation failed, showing English fallback", state="error")
             except Exception as e:
                 trans_status.update(label=f"Translation error: {e}", state="error")
 
-    if final_raw_result:
-        st.session_state.raw_result = final_raw_result
+    # Step 4: Parse the structured result
+    if final_result:
+        st.session_state.raw_result = final_result
 
-        sm = re.search(r'SUMMARY:\s*(.*?)(?=\nDEADLINE:|\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
-        dl = re.search(r'DEADLINE:\s*(.*?)(?=\nCHECKLIST:|\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
-        nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
-        cl = re.search(r'CHECKLIST:\s*(.*?)(?=\nNOTE:|\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
+        sm = re.search(r'SUMMARY:\s*(.*?)(?=\nDEADLINE:|\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        dl = re.search(r'DEADLINE:\s*(.*?)(?=\nCHECKLIST:|\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        cl = re.search(r'CHECKLIST:\s*(.*?)(?=\nNOTE:|\Z)', final_result, re.DOTALL|re.IGNORECASE)
 
         summary = sm.group(1).strip() if sm else "No summary."
         deadline_text = dl.group(1).strip() if dl else "Not specified"
         note = nt.group(1).strip() if nt else "None"
         checklist_raw = cl.group(1).strip() if cl else ""
 
+        # Deterministic checklist parsing: extract lines starting with a number
         items = []
         for line in checklist_raw.split('\n'):
             line = line.strip()
-            clean = re.sub(r'^[\d\)\.\-\*]+\s*','',line).strip()
-            if clean: items.append(clean)
+            # Match lines starting with a number followed by a dot or parenthesis
+            match = re.match(r'^\s*(?:\d+[\)\.]|\*|\-)\s+(.*)', line)
+            if match:
+                clean = match.group(1).strip()
+                if clean:
+                    items.append(clean)
+            # Fallback: if no number, but line is not empty and not a header
+            elif line and not re.match(r'^(CHECKLIST|NOTE|SUMMARY|DEADLINE)', line, re.IGNORECASE):
+                items.append(line)
+
         st.session_state.checklist_items = items
 
         parsed = db.parse_deadline_date(deadline_text)
@@ -653,7 +700,7 @@ def analyze_notice():
             title=f"Notice ({date.today().isoformat()})",
             summary=summary,
             deadline_date_str=parsed_str,
-            raw_result=raw_result_en # Save canonical English raw result
+            raw_result=en_structured # Save canonical English structured result
         )
         if saved:
             st.success(L["save_success"])
