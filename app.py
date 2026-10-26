@@ -160,10 +160,9 @@ LOGO_HTML = """
 st.markdown("""
     <style>
     /* 1. FORCE LIGHT MODE GLOBALLY TO PREVENT DARK THEME CONFLICTS */
-    html, body, [data-testid="stApp"] {
+    html, body, [data-testid="stApp"], [data-testid="stHeader"], .stSidebar {
         background-color: #FCFBF9 !important;
         color: #1F2937 !important;
-        font-family: 'Inter', sans-serif;
     }
 
     /* Force all text, headers, and labels to dark charcoal */
@@ -187,8 +186,8 @@ st.markdown("""
         border-radius: 8px !important;
     }
 
-    /* 3. FILE UPLOADER HIGH CONTRAST FIX (The core fix for the black box) */
-    /* Outer container of the uploader */
+    /* 3. FILE UPLOADER HIGH CONTRAST FIX (The core fix for the black box in dark mode) */
+    /* Outer container of the uploader - force pure white background */
     div[data-testid="stFileUploader"] {
         background-color: #FFFFFF !important;
         border: 2px dashed #FF6B6B !important;
@@ -197,7 +196,7 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02) !important;
     }
     
-    /* Inner dropzone area - force clean white background */
+    /* Inner dropzone area - force clean white background and prevent dark mode blending */
     div[data-testid="stFileUploaderDropzone"] {
         background-color: #FFFFFF !important;
         border: none !important;
@@ -205,7 +204,7 @@ st.markdown("""
         border-radius: 12px !important;
     }
     
-    /* Force ALL text, labels, and metadata inside the dropzone to be dark charcoal */
+    /* Force ALL text, labels, metadata, and placeholders inside the dropzone to be dark charcoal */
     div[data-testid="stFileUploaderDropzone"] p,
     div[data-testid="stFileUploaderDropzone"] span,
     div[data-testid="stFileUploaderDropzone"] div,
@@ -324,19 +323,13 @@ st.markdown("""
         height: 24px !important;
     }
 
-    /* 7. FORCE DROPDOWN ARROWS & EYE ICONS TO BE DARK CHARCOAL */
-    .stSidebar svg {
-        stroke: #1F2937 !important;
+    /* 7. FORCE ALL SVG ICONS (ARROWS, EYES, SEARCH) TO BE DARK CHARCOAL */
+    .stSidebar svg,
+    .stSelectbox svg,
+    .stTextInput svg,
+    div[data-testid="stFileUploaderDropzone"] svg {
         fill: #1F2937 !important;
-        color: #1F2937 !important;
-    }
-    .stSidebar .stTextInput button svg,
-    .stSidebar input[type="password"] ~ button svg {
         stroke: #1F2937 !important;
-        fill: #1F2937 !important;
-        color: #1F2937 !important;
-        width: 20px !important;
-        height: 20px !important;
     }
 
     /* 8. FIX FOR INVISIBLE WHITE TEXT IN INPUTS (Language dropdown & API inputs) */
@@ -385,6 +378,31 @@ st.markdown("""
     div[role="option"][aria-selected="true"] {
         background-color: rgba(255, 107, 107, 0.1) !important;
         color: #D9534F !important;
+    }
+
+    /* 10. TARGET STREAMLIT SETTINGS DROPDOWN MENU (Rerun, Clear cache, etc.) */
+    /* Force the dropdown popup to have a clean white background */
+    div[role="menu"] {
+        background-color: #FFFFFF !important;
+        color: #1F2937 !important;
+        border: 1px solid #E5E7EB !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Force all text inside the dropdown menu to be dark charcoal */
+    div[role="menu"] span,
+    div[role="menu"] div,
+    div[role="menuitem"],
+    div[role="menuitem"] p {
+        color: #1F2937 !important;
+        font-weight: 600 !important;
+    }
+
+    /* Hover effect when moving cursor over dropdown options */
+    div[role="menuitem"]:hover {
+        background-color: #F3F4F6 !important;
+        color: #111827 !important;
     }
     </style>
 """, unsafe_allow_html=True)
