@@ -349,9 +349,8 @@ st.markdown("""
         font-weight: 600;
     }
 
-    /* 9. DROPDOWN LIST POPUP CONTRAST FIX (White background, black text) */
-    .stSelectbox [data-baseweb="select"] [role="listbox"],
-    .stSidebar .stSelectbox [data-baseweb="select"] [role="listbox"] {
+    /* 9. TARGET ALL DROPDOWN POPUPS USING GLOBAL ARIA ROLES (Foolproof) */
+    div[role="listbox"] {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
         border: 1px solid #E5E7EB !important;
@@ -360,8 +359,7 @@ st.markdown("""
     }
 
     /* Target individual dropdown options inside the popup list */
-    .stSelectbox [data-baseweb="select"] [role="option"],
-    .stSidebar .stSelectbox [data-baseweb="select"] [role="option"] {
+    div[role="option"] {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
         font-weight: 600 !important;
@@ -370,15 +368,13 @@ st.markdown("""
     }
 
     /* Hover effect when moving cursor over dropdown options */
-    .stSelectbox [data-baseweb="select"] [role="option"]:hover,
-    .stSidebar .stSelectbox [data-baseweb="select"] [role="option"]:hover {
+    div[role="option"]:hover {
         background-color: #F3F4F6 !important; /* Light grey hover background */
         color: #111827 !important;
     }
 
     /* Selected/Active option highlight state */
-    .stSelectbox [data-baseweb="select"] [aria-selected="true"],
-    .stSidebar .stSelectbox [data-baseweb="select"] [aria-selected="true"] {
+    div[role="option"][aria-selected="true"] {
         background-color: rgba(255, 107, 107, 0.1) !important;
         color: #D9534F !important;
     }
