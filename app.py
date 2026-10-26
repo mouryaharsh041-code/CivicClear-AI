@@ -6,7 +6,7 @@ import base64
 # 1. PAGE CONFIG
 st.set_page_config(page_title="CivicClear AI", layout="wide")
 
-# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE & FIX THE BLACK UPLOADER BAR
+# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE, FIX THE BLACK UPLOADER, AND HIDE THE THEME SWITCHER
 st.markdown("""
     <style>
     /* Force global light theme on html, body, and main app container */
@@ -53,6 +53,43 @@ st.markdown("""
         border: none !important;
         border-radius: 8px !important;
         font-weight: 700 !important;
+    }
+
+    /* 3. HIDE ONLY THE THEME SWITCHER (SYSTEM, LIGHT, DARK BUTTONS) */
+    /* Target the standard Streamlit theme toggle container inside the settings menu */
+    .stThemeToggle,
+    div[data-testid="stThemeToggle"] {
+        display: none !important;
+    }
+
+    /* Hide the horizontal separator line that follows the theme switcher */
+    div[role="menu"] > hr {
+        display: none !important;
+    }
+
+    /* 4. STYLE THE REMAINING SETTINGS MENU (Rerun, Clear cache, Print, etc.) */
+    /* Force the dropdown popup to have a clean white background */
+    div[role="menu"] {
+        background-color: #FFFFFF !important;
+        color: #1F2937 !important;
+        border: 1px solid #E5E7EB !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Force all text inside the dropdown menu to be dark charcoal */
+    div[role="menu"] span,
+    div[role="menu"] div,
+    div[role="menuitem"],
+    div[role="menuitem"] p {
+        color: #1F2937 !important;
+        font-weight: 600 !important;
+    }
+
+    /* Hover effect when moving cursor over dropdown options */
+    div[role="menuitem"]:hover {
+        background-color: #F3F4F6 !important;
+        color: #111827 !important;
     }
     </style>
 """, unsafe_allow_html=True)
