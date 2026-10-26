@@ -11,8 +11,19 @@ from datetime import date
 
 import db  # Our database module
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="CivicClear AI | SaralNotice", page_icon="🏛️", layout="wide")
+# --- PAGE CONFIG & THEME LOCK ---
+st.set_page_config(
+    page_title="CivicClear AI | SaralNotice",
+    page_icon="🏛️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Programmatically attempt to lock the base theme to light
+try:
+    st.config_set('theme.base', 'light')
+except Exception:
+    pass
 
 # =========================================================
 # === BILINGUAL UI STRINGS ===
@@ -156,10 +167,10 @@ LOGO_HTML = """
 </div>
 """
 
-# --- PREMIUM CSS (WARM MINIMALIST THEME + UPLOADER FIX + INPUT VISIBILITY FIX + DROPDOWN FIX) ---
+# --- PREMIUM CSS (WARM MINIMALIST THEME + GLOBAL LIGHT THEME FORCE) ---
 st.markdown("""
     <style>
-    /* 1. FORCE LIGHT MODE GLOBALLY TO PREVENT DARK THEME CONFLICTS */
+    /* 1. GLOBAL LIGHT THEME OVERRIDE (Forces light mode even on dark system settings) */
     html, body, [data-testid="stApp"], [data-testid="stHeader"], .stSidebar {
         background-color: #FCFBF9 !important;
         color: #1F2937 !important;
@@ -186,7 +197,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
 
-    /* 3. FILE UPLOADER HIGH CONTRAST FIX (The core fix for the black box in dark mode) */
+    /* 3. FILE UPLOADER HIGH CONTRAST FIX (Crucial fix for black box in dark mode) */
     /* Outer container of the uploader - force pure white background */
     div[data-testid="stFileUploader"] {
         background-color: #FFFFFF !important;
@@ -409,18 +420,6 @@ st.markdown("""
     div[role="menuitem"]:hover {
         background-color: #F3F4F6 !important;
         color: #111827 !important;
-    }
-
-    /* 11. HIDE ONLY THE THEME SWITCHER (SYSTEM, LIGHT, DARK BUTTONS) */
-    /* Target the standard Streamlit theme toggle container */
-    .stThemeToggle,
-    div[data-testid="stThemeToggle"] {
-        display: none !important;
-    }
-
-    /* Hide the horizontal divider line below the theme switcher if it remains visible */
-    div[data-testid="stMenu"] > hr {
-        display: none !important;
     }
     </style>
 """, unsafe_allow_html=True)
