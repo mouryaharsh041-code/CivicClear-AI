@@ -313,7 +313,7 @@ Translate BOTH the section headers and the content under them into formal Hindi 
 - CHECKLIST: -> CHECKLIST:
 - NOTE: -> NOTE:
 
-(Keep the header labels in English keyword format "SUMMARY:", "DEADLINE:", "CHECKLIST:", "NOTE:" so they can be parsed, but translate everything else including section titles and descriptions completely into fluent formal Hindi).
+(Keep the header labels in English keyword format "SUMMARY:", "DEADLINE:", "CHECKLIST:", "NOTE:" so they can be parsed, but translate everything else including section descriptions completely into fluent formal Hindi).
 - DO NOT MERGE OR REORDER THE CHECKLIST ITEMS. Translate each numbered item exactly as written, keeping the exact same numbering (1, 2, 3...).
 
 English Text:
@@ -368,7 +368,7 @@ def get_available_gemini_models(api_key):
     return ["gemini-2.0-flash","gemini-1.5-flash"]
 
 # =========================================================
-# === CORE ANALYSIS PIPELINE ===
+# === CORE ANALYSIS PIPELINE (WITH TRANSPARENT ERRORS) ===
 # =========================================================
 def analyze_notice():
     if st.session_state.pil_image is None and st.session_state.pdf_text is None:
@@ -408,13 +408,17 @@ def analyze_notice():
                 try:
                     r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                     if r.status_code == 200:
-                        c = r.json()['choices'][0]['message']['content']
-                        if c and len(c.strip()) > 50:
-                            raw_text = c
-                            used_model = f"OpenRouter ({model})"
-                            break
-                except Exception:
-                    pass
+                        res_json = r.json()
+                        if 'choices' in res_json and len(res_json['choices']) > 0:
+                            c = res_json['choices'][0]['message']['content']
+                            if c and len(c.strip()) > 10:
+                                raw_text = c
+                                used_model = f"OpenRouter ({model})"
+                                break
+                    else:
+                        st.warning(f"OpenRouter model {model} returned status {r.status_code}: {r.text[:150]}", icon="⚠️")
+                except Exception as e:
+                    st.warning(f"OpenRouter connection warning for {model}: {e}", icon="⚠️")
 
         if not raw_text and gemini_key:
             models = get_available_gemini_models(gemini_key)
@@ -429,18 +433,23 @@ def analyze_notice():
                 try:
                     r = requests.post(url, json=payload, timeout=30)
                     if r.status_code == 200:
-                        c = r.json()['candidates'][0]['content']['parts'][0]['text']
-                        if c and len(c.strip()) > 50:
-                            raw_text = c
-                            used_model = f"Gemini ({m})"
-                            break
-                except Exception:
-                    pass
+                        res_json = r.json()
+                        if 'candidates' in res_json and len(res_json['candidates']) > 0:
+                            c = res_json['candidates'][0]['content']['parts'][0]['text']
+                            if c and len(c.strip()) > 10:
+                                raw_text = c
+                                used_model = f"Gemini ({m})"
+                                break
+                    else:
+                        st.warning(f"Gemini model {m} returned status {r.status_code}: {r.text[:150]}", icon="⚠️")
+                except Exception as e:
+                    st.warning(f"Gemini connection warning for {m}: {e}", icon="⚠️")
 
         if raw_text:
             status.update(label=f"Text extraction complete via {used_model}", state="complete")
         else:
-            status.update(label="Failed to extract text. Check API keys.", state="error")
+            status.update(label="Failed to extract text from document.", state="error")
+            st.error("❌ **OCR Extraction Failed:** Please verify that your API keys are correct, have active quota, and that your connection is stable.")
             return
 
     # Step 2: Extract structured fields in English
@@ -463,8 +472,10 @@ def analyze_notice():
                 r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                 if r.status_code == 200:
                     en_structured = r.json()['choices'][0]['message']['content']
-            except Exception:
-                pass
+                else:
+                    st.warning(f"Structured extraction status {r.status_code}: {r.text[:150]}", icon="⚠️")
+            except Exception as e:
+                st.warning(f"Structured extraction error: {e}", icon="⚠️")
         
         if not en_structured and gemini_key:
             models = get_available_gemini_models(gemini_key)
@@ -476,13 +487,14 @@ def analyze_notice():
                     if r.status_code == 200:
                         en_structured = r.json()['candidates'][0]['content']['parts'][0]['text']
                         break
-                except Exception:
-                    pass
+                except Exception as e:
+                    st.warning(f"Gemini structured fallback error: {e}", icon="⚠️")
 
         if en_structured:
             status.update(label="Structured extraction complete", state="complete")
         else:
             status.update(label="Failed to extract structured fields.", state="error")
+            st.error("❌ **Structuring Failed:** The AI model could not structure the extracted text fields.")
             return
 
     # Step 3: Translate to Hindi if selected
@@ -508,8 +520,10 @@ def analyze_notice():
                     if r.status_code == 200:
                         final_result = r.json()['choices'][0]['message']['content']
                         translated = True
-                except Exception:
-                    pass
+                    else:
+                        st.warning(f"Translation API status {r.status_code}: {r.text[:150]}", icon="⚠️")
+                except Exception as e:
+                    st.warning(f"Translation exception: {e}", icon="⚠️")
             
             if not translated and gemini_key:
                 try:
@@ -522,8 +536,8 @@ def analyze_notice():
                             final_result = r.json()['candidates'][0]['content']['parts'][0]['text']
                             translated = True
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    st.warning(f"Gemini translation fallback exception: {e}", icon="⚠️")
 
             if translated:
                 trans_status.update(label="Translation complete!", state="complete")
@@ -534,9 +548,8 @@ def analyze_notice():
     if final_result:
         st.session_state.raw_result = final_result
 
-        # Robust multi-language regex support for headings
         sm = re.search(r'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
-        dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|طقिम टिप्पणी|टिप्पणी):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|टिप्पणी):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
         nt = re.search(r'(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):\s*(.*?)(?=\Z)', final_result, re.DOTALL|re.IGNORECASE)
         cl = re.search(r'(?:CHECKLIST|कार्यवाही चरण):\s*(.*?)(?=\n(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
 
@@ -784,7 +797,6 @@ with tab_analyze:
         deadline = dl.group(1).strip() if dl else "Not specified"
         note = nt.group(1).strip() if nt else "No specific warnings noted."
 
-        # Dynamically render headings using the active language dictionary L[...]
         st.markdown(f"### {L['summary_header']}")
         st.info(summary)
         
