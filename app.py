@@ -26,12 +26,12 @@ except Exception:
     pass
 
 # =========================================================
-# === BILINGUAL UI STRINGS ===
+# === BILINGUAL UI STRINGS (PURE SINGLE-LANGUAGE HEADINGS) ===
 # =========================================================
 EN = {
     "title": "CivicClear AI | SaralNotice",
     "subtitle": "Actionable Clarity for Everyone",
-    "sidebar_lang": "Language / भाषा",
+    "sidebar_lang": "Language",
     "sidebar_keys": "🔑 API Keys",
     "key_openrouter": "OpenRouter API Key",
     "key_gemini": "Gemini API Key (Backup)",
@@ -46,17 +46,13 @@ EN = {
     "ready": "Ready to analyze!",
     "btn_upload_new": "🔄 Upload New Notice",
     "btn_analyze": "🚀 Analyze Notice",
-    "result_header": "📋 Result",
-    "summary_label": "Summary / सारांश",
-    "summary_header": "Summary / सारांश",
-    "deadline_label": "Deadline / अंतिम तिथि",
-    "deadline_header": "Deadline / अंतिम तिथि",
-    "note_label": "Note / टिप्पणी",
-    "note_header": "Important Note / महत्वपूर्ण टिप्पणी",
-    "checklist_label": "Interactive Action Steps / कार्यवाही चरण",
-    "checklist_header": "Interactive Action Steps",
+    "result_header": "Result",
+    "summary_header": "Summary",
+    "deadline_header": "Deadline",
+    "note_header": "Important Note",
+    "checklist_header": "Action Steps",
     "completed_text": "**{done} of {total} tasks completed**",
-    "audio_label": "🎧 Listen to Audio / ऑडियो सुनें",
+    "audio_label": "🎧 Listen to Audio",
     "no_notices": "No {category} notices.",
     "btn_mark_imp": "☆ Mark Important",
     "btn_mark_imp_done": "✓ Important",
@@ -86,8 +82,8 @@ EN = {
 HI = {
     "title": "🏛️ सिविक क्लियर एआई | सरल नोटिस",
     "subtitle": "सभी के लिए कार्रवाई योग्य स्पष्टता",
-    "sidebar_lang": "भाषा / Language",
-    "sidebar_keys": "🔑 अन्वेषण कुंजियाँ",
+    "sidebar_lang": "भाषा",
+    "sidebar_keys": "🔑 एपीआई कुंजियाँ",
     "key_openrouter": "ओपनराउटर एपीआई कुंजी",
     "key_gemini": "जेमिनी एपीआई कुंजी (बैकअप)",
     "cap_single": "एकल-उपयोगकर्ता डैशबोर्ड। लॉगिन की आवश्यकता नहीं।",
@@ -101,17 +97,13 @@ HI = {
     "ready": "विश्लेषण के लिए तैयार है!",
     "btn_upload_new": "🔄 नया नोटिस अपलोड करें",
     "btn_analyze": "🚀 नोटिस का विश्लेषण करें",
-    "result_header": "📋 परिणाम",
-    "summary_label": "सारांश / Summary",
-    "summary_header": "सारांश / Summary",
-    "deadline_label": "अंतिम तिथि / Deadline",
-    "deadline_header": "अंतिम तिथि / Deadline",
-    "note_label": "टिप्पणी / Note",
-    "note_header": "महत्वपूर्ण टिप्पणी / Important Note",
-    "checklist_label": "कार्यवाही चरण / Interactive Action Steps",
-    "checklist_header": "कार्यवाही चरण / Action Steps",
+    "result_header": "परिणाम",
+    "summary_header": "सारांश",
+    "deadline_header": "अंतिम तिथि",
+    "note_header": "महत्वपूर्ण टिप्पणी",
+    "checklist_header": "कार्यवाही चरण",
     "completed_text": "**{total} में से {done} कार्य पूर्ण हुए**",
-    "audio_label": "🎧 ऑडियो सुनें / Listen to Audio",
+    "audio_label": "🎧 ऑडियो सुनें",
     "no_notices": "कोई {category} नोटिस नहीं।",
     "btn_mark_imp": "☆ महत्वपूर्ण चिह्नित करें",
     "btn_mark_imp_done": "✓ महत्वपूर्ण",
@@ -167,117 +159,21 @@ LOGO_HTML = """
 </div>
 """
 
-# --- PREMIUM CSS (WARM MINIMALIST THEME + GLOBAL LIGHT THEME FORCE) ---
+# --- PREMIUM CSS ---
 st.markdown("""
     <style>
-    /* 1. GLOBAL LIGHT THEME OVERRIDE (Forces light mode even on dark system settings) */
     html, body, [data-testid="stApp"], [data-testid="stHeader"], .stSidebar {
         background-color: #FCFBF9 !important;
         color: #1F2937 !important;
     }
-
-    /* Force all text, headers, and labels to dark charcoal */
     h1, h2, h3, h4, h5, h6, span, p, label, div {
         color: #1F2937 !important;
     }
-
-    /* 2. SIDEBAR STYLING */
     .stSidebar {
         background-color: #F4EFE6 !important;
         color: #1F2937 !important;
         border-right: 1px solid #E5E7EB !important;
     }
-    .stSidebar .stMarkdown, .stSidebar .stMarkdown p, .stSidebar label {
-        color: #1F2937 !important;
-    }
-    .stSidebar .stSelectbox > div > div, .stSidebar .stTextInput > div > div {
-        background-color: #FFFFFF !important;
-        color: #1F2937 !important;
-        border: 1px solid #E5E7EB !important;
-        border-radius: 8px !important;
-    }
-
-    /* 3. FILE UPLOADER HIGH CONTRAST FIX */
-    div[data-testid="stFileUploader"] {
-        background-color: #FFFFFF !important;
-        border: 2px dashed #FF6B6B !important;
-        border-radius: 16px !important;
-        padding: 1.5rem !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02) !important;
-    }
-    
-    div[data-testid="stFileUploaderDropzone"] {
-        background-color: #FFFFFF !important;
-        border: none !important;
-        padding: 1rem !important;
-        border-radius: 12px !important;
-    }
-
-    div[data-testid="stFileUploaderDropzone"] div {
-        background-color: #FFFFFF !important;
-        background: #FFFFFF !important;
-    }
-    
-    div[data-testid="stFileUploaderDropzone"] p,
-    div[data-testid="stFileUploaderDropzone"] span,
-    div[data-testid="stFileUploaderDropzone"] div,
-    div[data-testid="stFileUploaderDropzone"] label {
-        color: #1F2937 !important;
-        font-weight: 600 !important;
-        opacity: 1 !important;
-    }
-    
-    div[data-testid="stFileUploaderDropzone"] button,
-    div[data-testid="stFileUploader"] button {
-        background-color: #FF6B6B !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 8px !important;
-        font-weight: 700 !important;
-        box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3) !important;
-    }
-    div[data-testid="stFileUploaderDropzone"] button:hover,
-    div[data-testid="stFileUploader"] button:hover {
-        background-color: #E55A52 !important;
-        color: #FFFFFF !important;
-    }
-
-    /* 4. TABS STYLING (Floating Hover Effect) */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 12px;
-        border-bottom: none !important;
-        padding-bottom: 8px;
-        background-color: transparent !important;
-        align-items: flex-end;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #FFFFFF !important;
-        color: #4B5563 !important;
-        font-weight: 600 !important;
-        border-radius: 10px !important;
-        padding: 10px 18px !important;
-        min-width: 130px !important;
-        white-space: nowrap !important;
-        border: 1px solid #E5E7EB !important;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-    }
-    .stTabs [data-baseweb="tab"]:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12) !important;
-        border-color: #FF6B6B !important;
-        z-index: 10;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important;
-        color: #FF6B6B !important;
-        border-color: #FF6B6B !important;
-        box-shadow: 0 4px 10px rgba(255, 107, 107, 0.2);
-        transform: translateY(-2px);
-    }
-
-    /* 5. CARDS & METRICS (Floating Box Style with Shadow) */
     .card {
         background-color: #FFFFFF !important;
         border-radius: 16px !important;
@@ -285,28 +181,7 @@ st.markdown("""
         margin-bottom: 20px !important;
         border: 1px solid #E5E7EB !important;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important;
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
-    .card:hover {
-        transform: translateY(-6px);
-        box-shadow: 0 18px 35px rgba(0, 0, 0, 0.18) !important;
-        border-color: #FF6B6B !important;
-    }
-    
-    .badge {
-        padding: 6px 14px !important;
-        border-radius: 999px !important;
-        font-size: 0.7rem !important;
-        font-weight: 600 !important;
-        text-transform: uppercase !important;
-        display: inline-block !important;
-        margin-bottom: 12px !important;
-    }
-    .badge-active { background: rgba(16, 185, 129, 0.1) !important; color: #10B981 !important; }
-    .badge-expired { background: rgba(239, 68, 68, 0.1) !important; color: #EF4444 !important; }
-    .badge-approaching { background: rgba(245, 158, 11, 0.1) !important; color: #F59E0B !important; }
-    .badge-important { background: rgba(139, 92, 246, 0.1) !important; color: #8B5CF6 !important; }
-    
     .stButton>button {
         background: #FF6B6B !important;
         color: white !important;
@@ -318,127 +193,12 @@ st.markdown("""
     .stButton>button:hover {
         background: #E55A52 !important;
     }
-
-    /* 6. HEADER & SIDEBAR TOGGLE */
-    header[data-testid="stHeader"] {
-        background-color: #FCFBF9 !important;
-        visibility: visible !important;
-        height: auto !important;
-        padding: 0 1rem !important;
-        border-bottom: 1px solid #E5E7EB !important;
-    }
-
-    header[data-testid="stHeader"] > * {
-        visibility: visible !important;
-    }
-
-    button[data-testid="stSidebarCollapseButton"] {
-        background-color: #FF6B6B !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 50% !important;
-        width: 48px !important;
-        height: 48px !important;
-        box-shadow: 0 0 12px rgba(255, 107, 107, 0.5) !important;
-        margin-top: 10px !important;
-        margin-bottom: 10px !important;
-    }
-
-    button[data-testid="stSidebarCollapseButton"] svg {
-        stroke: #FFFFFF !important;
-        fill: #FFFFFF !important;
-        width: 24px !important;
-        height: 24px !important;
-    }
-
-    /* 7. SVG ICONS */
-    .stSidebar svg,
-    .stSelectbox svg,
-    .stTextInput svg,
-    div[data-testid="stFileUploaderDropzone"] svg {
-        fill: #1F2937 !important;
-        stroke: #1F2937 !important;
-    }
-
-    /* 8. INPUTS TEXT */
-    .stSidebar .stSelectbox > div > div,
-    .stSidebar .stSelectbox [data-baseweb="select"] span,
-    .stSidebar .stSelectbox [role="listbox"] span,
-    .stSidebar input,
-    .stSidebar select,
-    .stSidebar textarea {
-        color: #1F2937 !important;
-        opacity: 1 !important;
-    }
-
-    .stSidebar input::placeholder,
-    .stSidebar .stTextInput input::placeholder {
-        color: #6B7280 !important;
-        opacity: 1 !important;
-        font-weight: 600;
-    }
-
-    /* 9. DROPDOWN LISTBOX */
-    div[role="listbox"] {
-        background-color: #FFFFFF !important;
-        color: #1F2937 !important;
-        border: 1px solid #E5E7EB !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-    }
-
-    div[role="option"] {
-        background-color: #FFFFFF !important;
-        color: #1F2937 !important;
-        font-weight: 600 !important;
-        padding: 10px 14px !important;
-        margin: 2px 0 !important;
-    }
-
-    div[role="option"]:hover {
-        background-color: #F3F4F6 !important;
-        color: #111827 !important;
-    }
-
-    div[role="option"][aria-selected="true"] {
-        background-color: rgba(255, 107, 107, 0.1) !important;
-        color: #D9534F !important;
-    }
-
-    /* 10. SETTINGS MENU DROPDOWN STYLING */
-    div[role="menu"] {
-        background-color: #FFFFFF !important;
-        color: #1F2937 !important;
-        border: 1px solid #E5E7EB !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-    }
-
-    div[role="menu"] span,
-    div[role="menu"] div,
-    div[role="menuitem"],
-    div[role="menuitem"] p {
-        color: #1F2937 !important;
-        font-weight: 600 !important;
-    }
-
-    div[role="menuitem"]:hover {
-        background-color: #F3F4F6 !important;
-        color: #111827 !important;
-    }
-
-    /* 11. HIDE THEME SWITCHER BLOCK USING VALID CSS STRUCTURAL SELECTORS */
-    .stThemeToggle,
-    div[data-testid="stThemeToggle"] {
+    .stThemeToggle, div[data-testid="stThemeToggle"] {
         display: none !important;
     }
-
-    /* Target the first child inside the settings menu (which holds the System/Light/Dark picker) */
     div[role="menu"] > div:first-child {
         display: none !important;
     }
-
-    /* Hide the horizontal divider line immediately following it */
     div[role="menu"] > hr:first-of-type {
         display: none !important;
     }
@@ -460,7 +220,7 @@ if 'previous_lang' not in st.session_state: st.session_state.previous_lang = Non
 
 # --- HINDI DATE TRANSLATOR ---
 def translate_date_to_hindi(date_str):
-    if not date_str:
+    if not date_str or date_str.lower() == "not specified":
         return L["no_deadline"]
     try:
         d = date.fromisoformat(date_str)
@@ -473,7 +233,7 @@ def translate_date_to_hindi(date_str):
         return date_str
 
 # =========================================================
-# === DYNAMIC MODEL SELECTION HELPER ===
+# === MODEL & PROMPT HELPERS ===
 # =========================================================
 def get_best_openrouter_model(api_key, supports_image=False):
     headers = {
@@ -498,7 +258,6 @@ def get_best_openrouter_model(api_key, supports_image=False):
                         continue
                     candidates.append(mid)
             
-            # Prioritize some known good ones if they exist, otherwise pick the first available
             priorities = [
                 "google/gemini-2.0-flash-lite-001:free",
                 "google/gemini-2.0-flash-exp:free",
@@ -512,26 +271,20 @@ def get_best_openrouter_model(api_key, supports_image=False):
                     return p
             if candidates:
                 return candidates[0]
-    except Exception as e:
-        print(f"Dynamic model selection error: {e}")
-    # Fallback defaults (only if API fails completely)
+    except Exception:
+        pass
     return "google/gemini-2.0-flash-lite-001:free" if supports_image else "meta-llama/llama-3.2-11b-vision-instruct:free"
 
-# =========================================================
-# === DETERMINISTIC PROMPTS ===
-# =========================================================
 def build_ocr_prompt():
-    """Extract all raw text from the document image/PDF."""
     return """Extract ALL text from this document exactly as it is written. 
 Preserve paragraph breaks. Do not summarize, translate, or omit any text."""
 
 def build_structured_extraction_prompt(raw_text):
-    """Extract structured fields from raw text deterministically."""
     return f"""From the following raw text of a government notice, extract the following fields:
 
 1. SUMMARY: A 2-3 sentence summary of the notice.
-2. DEADLINE: The main deadline date (e.g., "15 November 2026"). If multiple dates exist, extract the final deadline.
-3. CHECKLIST: Extract EVERY single action step as a numbered list. Do not merge steps. If a step has sub-steps, list them separately.
+2. DEADLINE: The main deadline date in YYYY-MM-DD format if possible, or standard format (e.g., "2026-11-15"). If multiple dates exist, extract the final deadline.
+3. CHECKLIST: Extract EVERY single action step as a numbered list. Do not merge steps.
 4. NOTE: Any penalty, fee, or warning.
 
 RAW TEXT:
@@ -553,13 +306,15 @@ NOTE:
 [penalty/warning]"""
 
 def build_translation_prompt(en_structured_text):
-    """Translate the structured English text to Hindi, preserving the numbered checklist."""
-    return f"""Translate the following structured notice details from English into formal Hindi.
+    return f"""Translate the following structured notice details from English into formal Hindi. 
+Translate BOTH the section headers and the content under them into formal Hindi matching these exact keys:
+- SUMMARY: -> SUMMARY:
+- DEADLINE: -> DEADLINE:
+- CHECKLIST: -> CHECKLIST:
+- NOTE: -> NOTE:
 
-CRITICAL RULES:
-- Translate the SUMMARY, DEADLINE, CHECKLIST, and NOTE sections.
-- **DO NOT MERGE OR REORDER THE CHECKLIST ITEMS.** Translate each numbered item exactly as written, keeping the exact same numbering (1, 2, 3...).
-- Keep the exact same formatting structure.
+(Keep the header labels in English keyword format "SUMMARY:", "DEADLINE:", "CHECKLIST:", "NOTE:" so they can be parsed, but translate everything else including section titles and descriptions completely into fluent formal Hindi).
+- DO NOT MERGE OR REORDER THE CHECKLIST ITEMS. Translate each numbered item exactly as written, keeping the exact same numbering (1, 2, 3...).
 
 English Text:
 {en_structured_text}"""
@@ -630,13 +385,11 @@ def analyze_notice():
     raw_text = None
     used_model = None
 
-    # Step 1: Extract raw text from the image/PDF
+    # Step 1: Extract raw text
     with st.status(L["analyzing"], expanded=True) as status:
         status.update(label="Extracting raw text from document...")
         
-        # --- Try OpenRouter First ---
         if openrouter_key:
-            # Mandatory headers for OpenRouter
             headers = {
                 "Authorization": f"Bearer {openrouter_key}",
                 "Content-Type": "application/json",
@@ -660,12 +413,9 @@ def analyze_notice():
                             raw_text = c
                             used_model = f"OpenRouter ({model})"
                             break
-                    else:
-                        status.update(label=f"OpenRouter model {model} failed with status {r.status_code}")
-                except Exception as e:
-                    status.update(label=f"OpenRouter connection error: {e}")
+                except Exception:
+                    pass
 
-        # --- Fallback to Gemini ---
         if not raw_text and gemini_key:
             models = get_available_gemini_models(gemini_key)
             for m in models:
@@ -684,21 +434,18 @@ def analyze_notice():
                             raw_text = c
                             used_model = f"Gemini ({m})"
                             break
-                    else:
-                        status.update(label=f"Gemini model {m} failed with status {r.status_code}")
-                except Exception as e:
-                    status.update(label=f"Gemini connection error: {e}")
+                except Exception:
+                    pass
 
         if raw_text:
             status.update(label=f"Text extraction complete via {used_model}", state="complete")
         else:
-            status.update(label="Failed to extract text. Check API keys or internet connection.", state="error")
+            status.update(label="Failed to extract text. Check API keys.", state="error")
             return
 
-    # Step 2: Extract structured fields from raw text
+    # Step 2: Extract structured fields in English
     en_structured = None
     with st.status("Extracting structured fields...", expanded=True) as status:
-        # Use OpenRouter for structured extraction if key exists, otherwise try Gemini text model
         if openrouter_key:
             headers = {
                 "Authorization": f"Bearer {openrouter_key}",
@@ -706,7 +453,6 @@ def analyze_notice():
                 "HTTP-Referer": "https://civicclear-ai.streamlit.app",
                 "X-Title": "CivicClear AI"
             }
-            # Dynamically select model (no hardcoding!)
             model_to_use = get_best_openrouter_model(openrouter_key, supports_image=False)
             payload = {
                 "model": model_to_use, 
@@ -717,12 +463,9 @@ def analyze_notice():
                 r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                 if r.status_code == 200:
                     en_structured = r.json()['choices'][0]['message']['content']
-                else:
-                    status.update(label=f"OpenRouter structured extraction failed: {r.text[:100]}")
-            except Exception as e:
-                status.update(label=f"OpenRouter structured extraction error: {e}")
+            except Exception:
+                pass
         
-        # Fallback to Gemini if OpenRouter failed or not configured
         if not en_structured and gemini_key:
             models = get_available_gemini_models(gemini_key)
             for m in models:
@@ -733,7 +476,7 @@ def analyze_notice():
                     if r.status_code == 200:
                         en_structured = r.json()['candidates'][0]['content']['parts'][0]['text']
                         break
-                except Exception as e:
+                except Exception:
                     pass
 
         if en_structured:
@@ -742,13 +485,11 @@ def analyze_notice():
             status.update(label="Failed to extract structured fields.", state="error")
             return
 
-    # Step 3: Translate to Hindi if needed (Robust Dual-Provider Routing)
+    # Step 3: Translate to Hindi if selected
     final_result = en_structured
     if en_structured and current_lang == "Hindi":
-        with st.status("Translating to Hindi (preserving structure)...", expanded=True) as trans_status:
+        with st.status("Translating to Hindi...", expanded=True) as trans_status:
             translated = False
-            
-            # Try OpenRouter first
             if openrouter_key:
                 try:
                     headers = {
@@ -767,12 +508,9 @@ def analyze_notice():
                     if r.status_code == 200:
                         final_result = r.json()['choices'][0]['message']['content']
                         translated = True
-                    else:
-                        trans_status.update(label=f"OpenRouter translation failed: {r.text[:100]}")
-                except Exception as e:
-                    trans_status.update(label=f"OpenRouter translation error: {e}")
+                except Exception:
+                    pass
             
-            # Fallback to Gemini if OpenRouter failed or not configured
             if not translated and gemini_key:
                 try:
                     models = get_available_gemini_models(gemini_key)
@@ -784,29 +522,29 @@ def analyze_notice():
                             final_result = r.json()['candidates'][0]['content']['parts'][0]['text']
                             translated = True
                             break
-                except Exception as e:
-                    trans_status.update(label=f"Gemini translation error: {e}")
+                except Exception:
+                    pass
 
             if translated:
                 trans_status.update(label="Translation complete!", state="complete")
             else:
-                trans_status.update(label="Translation failed, showing English fallback", state="error")
+                trans_status.update(label="Translation failed, showing fallback", state="error")
 
-    # Step 4: Parse the structured result and save to database
+    # Step 4: Parse structured result & save to DB
     if final_result:
         st.session_state.raw_result = final_result
 
-        sm = re.search(r'SUMMARY:\s*(.*?)(?=\nDEADLINE:|\Z)', final_result, re.DOTALL|re.IGNORECASE)
-        dl = re.search(r'DEADLINE:\s*(.*?)(?=\nCHECKLIST:|\Z)', final_result, re.DOTALL|re.IGNORECASE)
-        nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', final_result, re.DOTALL|re.IGNORECASE)
-        cl = re.search(r'CHECKLIST:\s*(.*?)(?=\nNOTE:|\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        # Robust multi-language regex support for headings
+        sm = re.search(r'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|طقिम टिप्पणी|टिप्पणी):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        nt = re.search(r'(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):\s*(.*?)(?=\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        cl = re.search(r'(?:CHECKLIST|कार्यवाही चरण):\s*(.*?)(?=\n(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
 
         summary = sm.group(1).strip() if sm else "No summary available."
         deadline_text = dl.group(1).strip() if dl else "Not specified"
         note = nt.group(1).strip() if nt else "None"
         checklist_raw = cl.group(1).strip() if cl else ""
 
-        # Deterministic checklist parsing: extract lines starting with a number
         items = []
         for line in checklist_raw.split('\n'):
             line = line.strip()
@@ -815,23 +553,19 @@ def analyze_notice():
                 clean = match.group(1).strip()
                 if clean:
                     items.append(clean)
-            elif line and not re.match(r'^(CHECKLIST|NOTE|SUMMARY|DEADLINE)', line, re.IGNORECASE):
+            elif line and not re.match(r'^(CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि)', line, re.IGNORECASE):
                 items.append(line)
 
         st.session_state.checklist_items = items
 
         parsed = db.parse_deadline_date(deadline_text)
         parsed_str = parsed.isoformat() if parsed else None
-        saved = db.save_notice(
+        db.save_notice(
             title=f"Notice ({date.today().isoformat()})",
             summary=summary,
             deadline_date_str=parsed_str,
-            raw_result=en_structured # Save canonical English structured result
+            raw_result=en_structured
         )
-        if saved:
-            st.success(L["save_success"])
-        else:
-            st.info(L["already_saved"])
 
         try:
             checklist_text = ". ".join(items)
@@ -882,7 +616,7 @@ def render_cards(notices, category_key):
                 else:
                     deadline_display = n['deadline_date'] or L["no_deadline"]
                 
-                st.markdown(f"**📅 {L['deadline_label'].split('/')[0].strip()}:** `{deadline_display}`")
+                st.markdown(f"**📅 {L['deadline_header']}:** `{deadline_display}`")
             with c2:
                 st.markdown(f'<span class="badge {badge_map.get(category_key,"")}">{cat_display}</span>', unsafe_allow_html=True)
                 is_imp = n['is_important'] == 1
@@ -970,7 +704,6 @@ tab_analyze, tab_active, tab_approach, tab_expired, tab_imp = st.tabs(tab_labels
 
 # ================= TAB 1: ANALYZE =================
 with tab_analyze:
-    # Check if language has changed and re-analyze automatically
     if st.session_state.previous_lang != current_lang:
         if st.session_state.pil_image is not None or st.session_state.pdf_text is not None:
             st.session_state.previous_lang = current_lang
@@ -992,7 +725,7 @@ with tab_analyze:
                             st.session_state.pil_image = Image.frombytes("RGB",[pix.width,pix.height],pix.samples)
                             st.session_state.pdf_text = None
                             stt.update(label="PDF processed via PyMuPDF (Image)", state="complete")
-                        except Exception as fitz_err:
+                        except Exception:
                             from pypdf import PdfReader
                             f.seek(0)
                             reader = PdfReader(f)
@@ -1043,15 +776,15 @@ with tab_analyze:
     if st.session_state.raw_result:
         raw_result = st.session_state.raw_result
         
-        # Use regex to safely extract fields; fallback to raw text if regex misses
-        sm = re.search(r'SUMMARY:\s*(.*?)(?=\nDEADLINE:|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
-        dl = re.search(r'DEADLINE:\s*(.*?)(?=\nCHECKLIST:|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
-        nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', raw_result, re.DOTALL|re.IGNORECASE)
+        sm = re.search(r'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण):|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
+        dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|टिप्पणी):|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
+        nt = re.search(r'(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):\s*(.*?)(?=\Z)', raw_result, re.DOTALL|re.IGNORECASE)
 
-        summary = sm.group(1).strip() if sm else raw_result[:300] # Fallback to start of text
+        summary = sm.group(1).strip() if sm else raw_result[:300]
         deadline = dl.group(1).strip() if dl else "Not specified"
         note = nt.group(1).strip() if nt else "No specific warnings noted."
 
+        # Dynamically render headings using the active language dictionary L[...]
         st.markdown(f"### {L['summary_header']}")
         st.info(summary)
         
