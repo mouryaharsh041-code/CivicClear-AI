@@ -275,6 +275,57 @@ def get_best_openrouter_model(api_key, supports_image=False):
         pass
     return "google/gemini-2.0-flash-lite-001:free" if supports_image else "meta-llama/llama-3.2-11b-vision-instruct:free"
 
+def call_openrouter_with_retry(api_key, messages, max_tokens=2048, supports_image=False):
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://civicclear-ai.streamlit.app",
+        "X-Title": "CivicClear AI"
+    }
+    
+    # Get the best model dynamically
+    best_model = get_best_openrouter_model(api_key, supports_image=supports_image)
+    
+    # Create a list of models to try: dynamic best first, then fallbacks
+    fallbacks = [
+        "google/gemini-2.0-flash-lite-001:free",
+        "google/gemini-flash-1.5:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "meta-llama/llama-3.2-11b-vision-instruct:free"
+    ]
+    
+    models_to_try = [best_model] if best_model else []
+    for m in fallbacks:
+        if m not in models_to_try:
+            models_to_try.append(m)
+            
+    for model in models_to_try:
+        try:
+            payload = {
+                "model": model, 
+                "max_tokens": max_tokens,
+                "messages": messages
+            }
+            r = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions", 
+                headers=headers, 
+                data=json.dumps(payload), 
+                timeout=15  # Fast timeout to skip decommissioned models quickly
+            )
+            
+            if r.status_code == 200:
+                res_data = r.json()
+                if 'choices' in res_data and len(res_data['choices']) > 0:
+                    content = res_data['choices'][0]['message']['content']
+                    if content and len(content.strip()) > 5:
+                        return content, model
+            # If status code is not 200 (e.g. 404 model decommissioned), try next model silently
+        except Exception as e:
+            # Connection error or timeout, try next model silently
+            continue
+            
+    return None, None
+
 def build_ocr_prompt():
     return """Extract ALL text from this document exactly as it is written. 
 Preserve paragraph breaks. Do not summarize, translate, or omit any text."""
@@ -317,7 +368,8 @@ Translate BOTH the section headers and the content under them into formal Hindi 
 - DO NOT MERGE OR REORDER THE CHECKLIST ITEMS. Translate each numbered item exactly as written, keeping the exact same numbering (1, 2, 3...).
 
 English Text:
-{en_structured_text}"""
+{en_structured_text}
+"""
 
 def clean_text_for_tts(text, lang):
     text = re.sub(r'[\#\*\_\~\`\|\<\>]', ' ', text)
@@ -390,37 +442,18 @@ def analyze_notice():
         status.update(label="Extracting raw text from document...")
         
         if openrouter_key:
-            headers = {
-                "Authorization": f"Bearer {openrouter_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://civicclear-ai.streamlit.app", 
-                "X-Title": "CivicClear AI"
-            }
             content_payload = [{"type": "text", "text": build_ocr_prompt()}]
             if st.session_state.pdf_text:
                 content_payload[0]["text"] = f"Extract all text from this PDF:\n\n{st.session_state.pdf_text}"
             else:
                 content_payload.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
-
-            for model in get_active_free_vision_models():
-                payload = {"model": model, "max_tokens": 4096,
-                           "messages": [{"role":"user","content": content_payload}]}
-                try:
-                    r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
-                    if r.status_code == 200:
-                        res_json = r.json()
-                        if 'choices' in res_json and len(res_json['choices']) > 0:
-                            c = res_json['choices'][0]['message']['content']
-                            if c and len(c.strip()) > 10:
-                                raw_text = c
-                                used_model = f"OpenRouter ({model})"
-                                break
-                    else:
-                        # Silent retry on 502/503
-                        pass
-                except Exception as e:
-                    # Silent retry on connection errors
-                    pass
+            
+            raw_text, used_model = call_openrouter_with_retry(
+                openrouter_key, 
+                [{"role":"user","content": content_payload}], 
+                max_tokens=4096, 
+                supports_image=True
+            )
 
         if not raw_text and gemini_key:
             models = get_available_gemini_models(gemini_key)
@@ -433,7 +466,7 @@ def analyze_notice():
                     content_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
                 payload = {"contents":[{"parts": content_parts}]}
                 try:
-                    r = requests.post(url, json=payload, timeout=30)
+                    r = requests.post(url, json=payload, timeout=15)
                     if r.status_code == 200:
                         res_json = r.json()
                         if 'candidates' in res_json and len(res_json['candidates']) > 0:
@@ -442,8 +475,6 @@ def analyze_notice():
                                 raw_text = c
                                 used_model = f"Gemini ({m})"
                                 break
-                    else:
-                        pass
                 except Exception as e:
                     pass
 
@@ -456,35 +487,15 @@ def analyze_notice():
 
     # Step 2: Extract structured fields in English (With Safe JSON Parsing & Silent Retries)
     en_structured = None
+    model_used = None
     with st.status("Extracting structured fields...", expanded=True) as status:
         if openrouter_key:
-            headers = {
-                "Authorization": f"Bearer {openrouter_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://civicclear-ai.streamlit.app",
-                "X-Title": "CivicClear AI"
-            }
-            model_to_use = get_best_openrouter_model(openrouter_key, supports_image=False)
-            payload = {
-                "model": model_to_use, 
-                "max_tokens": 2048,
-                "messages": [{"role":"user","content": build_structured_extraction_prompt(raw_text)}]
-            }
-            try:
-                r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
-                if r.status_code == 200:
-                    res_data = r.json()
-                    if 'choices' in res_data and len(res_data['choices']) > 0:
-                        en_structured = res_data['choices'][0]['message']['content']
-                    else:
-                        # Silent fail to try next model
-                        pass
-                else:
-                    # Silent fail to try next model (e.g. on 502)
-                    pass
-            except Exception as e:
-                # Silent fail to try next model
-                pass
+            en_structured, model_used = call_openrouter_with_retry(
+                openrouter_key, 
+                [{"role":"user","content": build_structured_extraction_prompt(raw_text)}], 
+                max_tokens=2048, 
+                supports_image=False
+            )
         
         if not en_structured and gemini_key:
             models = get_available_gemini_models(gemini_key)
@@ -492,17 +503,18 @@ def analyze_notice():
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
                 payload = {"contents":[{"parts":[{"text": build_structured_extraction_prompt(raw_text)}]}]}
                 try:
-                    r = requests.post(url, json=payload, timeout=30)
+                    r = requests.post(url, json=payload, timeout=15)
                     if r.status_code == 200:
                         res_data = r.json()
                         if 'candidates' in res_data and len(res_data['candidates']) > 0:
                             en_structured = res_data['candidates'][0]['content']['parts'][0]['text']
+                            model_used = f"Gemini ({m})"
                             break
                 except Exception as e:
                     pass
 
         if en_structured:
-            status.update(label="Structured extraction complete", state="complete")
+            status.update(label=f"Structured extraction complete via {model_used}", state="complete")
         else:
             status.update(label="Failed to extract structured fields.", state="error")
             st.error("❌ **Structuring Failed:** The AI model could not structure the extracted text fields.")
@@ -513,55 +525,37 @@ def analyze_notice():
     if en_structured and current_lang == "Hindi":
         with st.status("Translating to Hindi...", expanded=True) as trans_status:
             translated = False
+            model_used_trans = None
             
-            # Try OpenRouter first
             if openrouter_key:
-                try:
-                    headers = {
-                        "Authorization": f"Bearer {openrouter_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://civicclear-ai.streamlit.app",
-                        "X-Title": "CivicClear AI"
-                    }
-                    model_to_use_trans = get_best_openrouter_model(openrouter_key, supports_image=False)
-                    payload = {
-                        "model": model_to_use_trans, 
-                        "max_tokens": 2048,
-                        "messages": [{"role":"user","content": build_translation_prompt(en_structured)}]
-                    }
-                    r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
-                    if r.status_code == 200:
-                        res_data = r.json()
-                        if 'choices' in res_data and len(res_data['choices']) > 0:
-                            final_result = res_data['choices'][0]['message']['content']
-                            translated = True
-                    else:
-                        # Silent fail to keep UI clean
-                        pass
-                except Exception as e:
-                    # Silent fail to keep UI clean
-                    pass
+                final_result, model_used_trans = call_openrouter_with_retry(
+                    openrouter_key, 
+                    [{"role":"user","content": build_translation_prompt(en_structured)}], 
+                    max_tokens=2048, 
+                    supports_image=False
+                )
+                if final_result:
+                    translated = True
             
-            # Fallback to Gemini if OpenRouter failed or not configured
             if not translated and gemini_key:
                 try:
                     models = get_available_gemini_models(gemini_key)
                     for m in models:
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
                         payload = {"contents":[{"parts":[{"text": build_translation_prompt(en_structured)}]}]}
-                        r = requests.post(url, json=payload, timeout=30)
+                        r = requests.post(url, json=payload, timeout=15)
                         if r.status_code == 200:
                             res_data = r.json()
                             if 'candidates' in res_data and len(res_data['candidates']) > 0:
                                 final_result = res_data['candidates'][0]['content']['parts'][0]['text']
+                                model_used_trans = f"Gemini ({m})"
                                 translated = True
                                 break
                 except Exception as e:
-                    # Silent fail to keep UI clean
                     pass
 
             if translated:
-                trans_status.update(label="Translation complete!", state="complete")
+                trans_status.update(label=f"Translation complete via {model_used_trans}!", state="complete")
             else:
                 trans_status.update(label="Translation failed. Showing English fallback.", state="error")
 
@@ -778,7 +772,7 @@ with tab_analyze:
                     
                     if st.session_state.pil_image:
                         img = st.session_state.pil_image
-                        img.thumbnail((1024,1024))
+                        img.thumbnail((512,512))  # OPTIMIZED: Reduced resolution for faster upload
                         if img.mode in ("RGBA","P"): img = img.convert("RGB")
                         buf = io.BytesIO(); img.save(buf,format="JPEG")
                         st.session_state.img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
