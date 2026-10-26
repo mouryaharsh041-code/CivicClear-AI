@@ -1,6 +1,6 @@
 streamlit
-requests
-pymupdf
-Pillow
-gTTS
 groq
+gTTS
+Pillow
+pymupdf==1.23.24
+requests
