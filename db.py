@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime, date, timedelta
 from hashlib import md5
+import re
 
 DB_NAME = "civicclear.db"
 
@@ -26,21 +27,67 @@ def init_db():
     conn.commit()
     conn.close()
 
+# =========================================================
+# ROBUST DATE PARSING LOGIC (Regex-based)
+# =========================================================
 def parse_deadline_date(text):
     if not text:
         return None
-    import re
-    text_clean = text.strip().split('\n')[0]
-    try:
-        for fmt in ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%d/%m/%Y"):
+    
+    text_clean = text.strip()
+    
+    # 1. Try direct standard formats on the first line first
+    first_line = text_clean.split('\n')[0].strip()
+    for fmt in ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(first_line, fmt).date()
+        except ValueError:
+            continue
+
+    # 2. Robust Regex fallback for messy, complex AI outputs
+    # Map month names (full and abbreviated) to numeric strings
+    month_map = {
+        'jan': '01', 'feb': '02', 'mar': '3', 'apr': '04', 'may': '05', 'jun': '06',
+        'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12',
+        'january': '01', 'february': '02', 'march': '03', 'april': '04', 'june': '06',
+        'july': '07', 'august': '08', 'september': '09', 'october': '10', 'november': '11', 'december': '12'
+    }
+    
+    # Pattern A: DD Month YYYY (e.g., "15 November 2026", "10 Nov 2026")
+    # Matches: day (1-2 digits), month word (3+ letters), year (4 digits)
+    match = re.search(r'\b(\d{1,2})\s+([a-zA-Z]{3,})\s+(\d{4})\b', text_clean)
+    if match:
+        day = match.group(1).zfill(2)
+        month_word = match.group(2).lower()
+        year = match.group(3)
+        month = month_map.get(month_word)
+        if month:
             try:
-                return datetime.strptime(text_clean, fmt).date()
+                return datetime.strptime(f"{year}-{month}-{day}", "%Y-%m-%d").date()
             except ValueError:
-                continue
-    except:
-        pass
+                pass
+
+    # Pattern B: YYYY-MM-DD (ISO format)
+    match = re.search(r'\b(\d{4})-(\d{2})-(\d{2})\b', text_clean)
+    if match:
+        try:
+            return datetime.strptime(match.group(0), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+    # Pattern C: DD/MM/YYYY (Common Indian format)
+    match = re.search(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', text_clean)
+    if match:
+        try:
+            return datetime.strptime(match.group(0), "%d/%m/%Y").date()
+        except ValueError:
+            pass
+
     return None
 
+# =========================================================
+# DATABASE OPERATIONS
+# =========================================================
 def save_notice(title, summary, deadline_date_str, raw_result):
     conn = get_conn()
     raw_hash = md5(raw_result.encode('utf-8')).hexdigest()
@@ -115,4 +162,5 @@ def delete_notice(notice_id):
     conn.commit()
     conn.close()
 
+# Initialize database tables on script load
 init_db()
