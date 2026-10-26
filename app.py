@@ -285,13 +285,14 @@ st.markdown("""
         padding: 24px !important;
         margin-bottom: 20px !important;
         border: 1px solid #E5E7EB !important;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important; /* Soft floating shadow */
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important; /* Stronger, more visible shadow */
         transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     /* HOVER FLOAT EFFECT: Lifts the card slightly and increases shadow intensity */
     .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+        transform: translateY(-6px);
+        box-shadow: 0 18px 35px rgba(0, 0, 0, 0.18) !important; /* Deep, prominent hover shadow */
+        border-color: #FF6B6B !important; /* Coral border on hover for extra pop */
     }
     
     .badge {
@@ -457,6 +458,7 @@ if 'audio_generated_for_lang' not in st.session_state: st.session_state.audio_ge
 if 'audio_version' not in st.session_state: st.session_state.audio_version = 0
 if 'confirm_delete_id' not in st.session_state: st.session_state.confirm_delete_id = None
 if 'pdf_text' not in st.session_state: st.session_state.pdf_text = None
+if 'previous_lang' not in st.session_state: st.session_state.previous_lang = None
 
 # --- HINDI DATE TRANSLATOR ---
 def translate_date_to_hindi(date_str):
@@ -789,6 +791,15 @@ tab_analyze, tab_active, tab_approach, tab_expired, tab_imp = st.tabs(tab_labels
 
 # ================= TAB 1: ANALYZE =================
 with tab_analyze:
+    # Check if language has changed and re-analyze automatically
+    if st.session_state.previous_lang != current_lang:
+        if st.session_state.pil_image is not None or st.session_state.pdf_text is not None:
+            st.session_state.previous_lang = current_lang
+            analyze_notice()
+            st.rerun()
+        else:
+            st.session_state.previous_lang = current_lang
+
     if st.session_state.show_uploader:
         f = st.file_uploader(L["uploader_label"], type=['jpg', 'png', 'jpeg', 'pdf'])
         if f:
@@ -845,10 +856,11 @@ with tab_analyze:
                 st.session_state.pdf_text = None
                 st.rerun()
         with col_btn:
-            if not st.session_state.raw_result:
-                if st.button(L["btn_analyze"], use_container_width=True, type="primary"):
-                    analyze_notice()
-                    st.rerun()
+            # Always show the analyze button if there is an image, but change label if already analyzed
+            btn_label = L["btn_analyze"] if not st.session_state.raw_result else L["btn_analyze"] + " (Re-analyze)"
+            if st.button(btn_label, use_container_width=True, type="primary"):
+                analyze_notice()
+                st.rerun()
 
     if st.session_state.raw_result:
         raw_result = st.session_state.raw_result
