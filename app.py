@@ -278,15 +278,22 @@ st.markdown("""
         transform: translateY(-2px); /* Keep the active tab slightly lifted for a modern look */
     }
 
-    /* 5. CARDS & METRICS */
+    /* 5. CARDS & METRICS (Floating Box Style with Shadow) */
     .card {
         background-color: #FFFFFF !important;
         border-radius: 16px !important;
         padding: 24px !important;
         margin-bottom: 20px !important;
         border: 1px solid #E5E7EB !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02) !important;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important; /* Soft floating shadow */
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
+    /* HOVER FLOAT EFFECT: Lifts the card slightly and increases shadow intensity */
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+    }
+    
     .badge {
         padding: 6px 14px !important;
         border-radius: 999px !important;
