@@ -245,7 +245,7 @@ st.markdown("""
     /* 4. TABS STYLING (Floating Hover Effect) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 12px;
-        border-bottom: none !important; /* Removes the bottom line to make it look floating */
+        border-bottom: none !important;
         padding-bottom: 8px;
         background-color: transparent !important;
         align-items: flex-end;
@@ -260,14 +260,13 @@ st.markdown("""
         white-space: nowrap !important;
         border: 1px solid #E5E7EB !important;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); /* Smooth animation */
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
     }
-    /* HOVER FLOAT EFFECT: Lifts the tab up and adds a stronger shadow */
     .stTabs [data-baseweb="tab"]:hover {
-        transform: translateY(-4px); /* Lifts the tab up by 4 pixels */
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12) !important; /* Lifted shadow */
-        border-color: #FF6B6B !important; /* Coral border on hover */
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12) !important;
+        border-color: #FF6B6B !important;
         z-index: 10;
     }
     .stTabs [aria-selected="true"] {
@@ -275,7 +274,7 @@ st.markdown("""
         color: #FF6B6B !important;
         border-color: #FF6B6B !important;
         box-shadow: 0 4px 10px rgba(255, 107, 107, 0.2);
-        transform: translateY(-2px); /* Keep the active tab slightly lifted for a modern look */
+        transform: translateY(-2px);
     }
 
     /* 5. CARDS & METRICS (Floating Box Style with Shadow) */
@@ -285,14 +284,13 @@ st.markdown("""
         padding: 24px !important;
         margin-bottom: 20px !important;
         border: 1px solid #E5E7EB !important;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important; /* Stronger, more visible shadow */
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important;
         transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
-    /* HOVER FLOAT EFFECT: Lifts the card slightly and increases shadow intensity */
     .card:hover {
         transform: translateY(-6px);
-        box-shadow: 0 18px 35px rgba(0, 0, 0, 0.18) !important; /* Deep, prominent hover shadow */
-        border-color: #FF6B6B !important; /* Coral border on hover for extra pop */
+        box-shadow: 0 18px 35px rgba(0, 0, 0, 0.18) !important;
+        border-color: #FF6B6B !important;
     }
     
     .badge {
@@ -475,32 +473,9 @@ def translate_date_to_hindi(date_str):
         return date_str
 
 # --- PROMPTS & HELPERS ---
-def build_prompt(selected_lang):
-    if selected_lang == "Hindi":
-        return """आप एक विशेषज्ग भाषा अनुवादक और कानूनी विश्लेषक हैं। इस नोटिस का विश्लेषण करें और इसका पूरा विवरण केवल और केवल शुद्ध, स्वाभाविक हिंदी में दें।
-
-महत्वपूर्ण नियम (CRITICAL RULE):
-चेकलिस्ट (CHECKLIST) बनाते समय, कृपया नोटिस में दिए गए हर एक छोटे-मोटे कदम को अलग-अलग बिंदु पर लिखें। कभी भी कई कदमों को मत मिलाएं (जैसे फीस भरना और फॉर्म जमा करना अलग-अलग चरण हैं)। नोटिस में जितने कदम होंगे, उतने ही हिंदी में बिंदु बनाएं। बिंदुओं की संख्या को बाधित न करें—बस जितने कदम नोटिस में हैं, उतने ही बिंदु लिखें ताकि यूजर को समझने में कोई कठिनता न हो।
-
-सूचना: अगर कोई डेडलाइन नोटिस में स्पष्ट रूप से नहीं दी गई है, तो DEADLINE के लिए "Not specified" लिखें। अन्यथा तिथि को अंग्रेजी में लिखें जैसे "25 October 2026"।
-
-FORMAT:
-SUMMARY:
-[सारांश]
-
-DEADLINE:
-[तिथि अंग्रेजी में जैसे: 25 October 2026]
-
-CHECKLIST:
-[चरण 1]
-[चरण 2]
-[चरण 3]
-... (नोटिस के अनुसार सभी चरण यहाँ लिखें)
-
-NOTE:
-[चेतावनी/शुल्क]"""
-    else:
-        return """Analyze this official notice and extract details. Return STRICTLY in this format:
+def build_extraction_prompt():
+    """Canonical English extraction prompt (source of truth)."""
+    return """Analyze this official notice and extract details. Return STRICTLY in this format:
 
 SUMMARY:
 [2-3 sentence summary]
@@ -509,10 +484,22 @@ DEADLINE:
 [Main deadline date, e.g., 25 October 2026]
 
 CHECKLIST:
-[Action steps, each on new line]
+[Action steps, each on a new line. Extract every single minor step individually without merging any.]
 
 NOTE:
 [Penalty, fee, or warning]"""
+
+def build_translation_prompt(en_raw_text):
+    """Prompt to translate the English extracted text to Hindi while preserving structure."""
+    return f"""Translate the following extracted notice details from English into natural, formal Hindi (used in official government communications in India).
+
+CRITICAL RULES:
+- Translate the SUMMARY, DEADLINE, CHECKLIST, and NOTE sections.
+- **DO NOT MERGE OR SUMMARIZE THE CHECKLIST ITEMS.** You must translate *every single bullet point* exactly as it is written, keeping the exact same number of bullet points.
+- Keep the exact same formatting structure (SUMMARY, DEADLINE, CHECKLIST, NOTE).
+
+English Text to translate:
+{en_raw_text}"""
 
 def clean_text_for_tts(text, lang):
     text = re.sub(r'[\#\*\_\~\`\|\<\>]', ' ', text)
@@ -575,17 +562,17 @@ def analyze_notice():
         return
 
     img_b64 = st.session_state.img_base64
-    raw_result = None
+    raw_result_en = None  # Canonical English result
     used_model = None
 
+    # Step 1: Always extract in English first
     with st.status(L["analyzing"], expanded=True) as status:
+        status.update(label="Extracting canonical English structure...")
         if openrouter_key:
-            status.update(label=L["try_openrouter"])
             headers = {"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"}
-            
-            content_payload = [{"type": "text", "text": build_prompt(current_lang)}]
+            content_payload = [{"type": "text", "text": build_extraction_prompt()}]
             if st.session_state.pdf_text:
-                content_payload[0]["text"] = f"Analyze the following notice text:\n\n{st.session_state.pdf_text}\n\n{build_prompt(current_lang)}"
+                content_payload[0]["text"] = f"Analyze the following notice text:\n\n{st.session_state.pdf_text}\n\n{build_extraction_prompt()}"
             else:
                 content_payload.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
 
@@ -597,42 +584,56 @@ def analyze_notice():
                     if r.status_code == 200:
                         c = r.json()['choices'][0]['message']['content']
                         if c and len(c.strip()) > 10:
-                            raw_result = c; used_model = f"OpenRouter ({model})"; break
+                            raw_result_en = c; used_model = f"OpenRouter ({model})"; break
                 except: continue
 
-        if not raw_result and gemini_key:
-            status.update(label=L["try_gemini"])
+        if not raw_result_en and gemini_key:
             models = get_available_gemini_models(gemini_key)
             for m in models:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
-                
-                content_parts = [{"text": build_prompt(current_lang)}]
+                content_parts = [{"text": build_extraction_prompt()}]
                 if st.session_state.pdf_text:
                     content_parts.insert(0, {"text": f"Notice text to analyze:\n{st.session_state.pdf_text}\n\n"})
                 else:
                     content_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
-
                 payload = {"contents":[{"parts": content_parts}]}
                 try:
                     r = requests.post(url, json=payload, timeout=30)
                     if r.status_code == 200:
                         c = r.json()['candidates'][0]['content']['parts'][0]['text']
                         if c and len(c.strip()) > 10:
-                            raw_result = c; used_model = f"Gemini ({m})"; break
+                            raw_result_en = c; used_model = f"Gemini ({m})"; break
                 except: continue
 
-        if raw_result:
-            status.update(label=L["done_model"].format(model=used_model), state="complete")
+        if raw_result_en:
+            status.update(label=f"Extraction complete via {used_model}", state="complete")
         else:
             status.update(label=L["all_fail"], state="error")
 
-    if raw_result:
-        st.session_state.raw_result = raw_result
+    # Step 2: Translate to Hindi if target language is Hindi
+    final_raw_result = raw_result_en
+    if raw_result_en and current_lang == "Hindi":
+        with st.status("Translating to Hindi (preserving structure)...", expanded=True) as trans_status:
+            try:
+                headers = {"Authorization": f"Bearer {openrouter_key or gemini_key}", "Content-Type": "application/json"}
+                payload = {"model": "meta-llama/llama-3.2-11b-vision-instruct", "max_tokens": 2048,
+                           "messages": [{"role":"user","content": build_translation_prompt(raw_result_en)}]}
+                r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
+                if r.status_code == 200:
+                    final_raw_result = r.json()['choices'][0]['message']['content']
+                    trans_status.update(label="Translation complete!", state="complete")
+                else:
+                    trans_status.update(label="Translation failed, showing English fallback", state="error")
+            except Exception as e:
+                trans_status.update(label=f"Translation error: {e}", state="error")
 
-        sm = re.search(r'SUMMARY:\s*(.*?)(?=\nDEADLINE:|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
-        dl = re.search(r'DEADLINE:\s*(.*?)(?=\nCHECKLIST:|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
-        nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', raw_result, re.DOTALL|re.IGNORECASE)
-        cl = re.search(r'CHECKLIST:\s*(.*?)(?=\nNOTE:|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
+    if final_raw_result:
+        st.session_state.raw_result = final_raw_result
+
+        sm = re.search(r'SUMMARY:\s*(.*?)(?=\nDEADLINE:|\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
+        dl = re.search(r'DEADLINE:\s*(.*?)(?=\nCHECKLIST:|\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
+        nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
+        cl = re.search(r'CHECKLIST:\s*(.*?)(?=\nNOTE:|\Z)', final_raw_result, re.DOTALL|re.IGNORECASE)
 
         summary = sm.group(1).strip() if sm else "No summary."
         deadline_text = dl.group(1).strip() if dl else "Not specified"
@@ -652,7 +653,7 @@ def analyze_notice():
             title=f"Notice ({date.today().isoformat()})",
             summary=summary,
             deadline_date_str=parsed_str,
-            raw_result=raw_result
+            raw_result=raw_result_en # Save canonical English raw result
         )
         if saved:
             st.success(L["save_success"])
