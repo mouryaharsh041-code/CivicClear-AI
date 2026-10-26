@@ -78,7 +78,7 @@ def get_approaching_notices(days_threshold=3):
     today = date.today()
     threshold = today + timedelta(days=days_threshold)
     rows = conn.execute(
-        "SELECT * FROM notices WHERE deadline_date IS NOT NULL AND deadline_date > ? AND deadline_date <= ? ORDER BY deadline_date ASC",
+        "SELECT * FROM notices WHERE deadline_date IS NOT NULL AND deadline_date >= ? AND deadline_date <= ? ORDER BY deadline_date ASC",
         (today.isoformat(), threshold.isoformat())
     ).fetchall()
     conn.close()
