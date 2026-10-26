@@ -4,17 +4,48 @@ import io
 import base64
 
 # 1. PAGE CONFIG
-st.set_page_config(page_title="CivicClear AI", layout="wide")
+st.set_page_config(
+    page_title="CivicClear AI",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE AND HIDE THEME SWITCHER
+# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE, HIDE THEME SWITCHER, & FIX UPLOADER
 st.markdown("""
     <style>
     /* Force global light theme on html, body, and main app container */
-    html, body, [data-testid="stApp"], [data-testid="stHeader"], .stSidebar {
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], .stSidebar {
         background-color: #FCFBF9 !important;
         color: #1F2937 !important;
     }
 
+    /* ---------------------------------------------------- */
+    /* HIDE THEME SELECTOR ENTIRELY                         */
+    /* ---------------------------------------------------- */
+    /* Hide top header theme toggle button if present */
+    [data-testid="stThemeToggle"], .stThemeToggle {
+        display: none !important;
+    }
+
+    /* Hide theme options / text within the settings modal or popover */
+    [data-testid="stSettingsDialog"] [data-testid="stMarkdownContainer"]:has(span:contains("Theme")),
+    [data-testid="stSettingsDialog"] div:has(> label:contains("Theme")),
+    div[role="dialog"] div:has(input[name="theme"]) {
+        display: none !important;
+    }
+
+    /* Target theme selection section in standard popover/dropdown menus */
+    li:has(span:contains("Light")),
+    li:has(span:contains("Dark")),
+    li:has(span:contains("Use system setting")),
+    div[role="menuitem"]:has(span:contains("Theme")),
+    div[role="radiogroup"]:has(input[name*="theme"]) {
+        display: none !important;
+    }
+
+    /* ---------------------------------------------------- */
+    /* FILE UPLOADER STYLING                                */
+    /* ---------------------------------------------------- */
     /* Force the outer uploader container to pure white */
     div[data-testid="stFileUploader"] {
         background-color: #FFFFFF !important;
@@ -29,23 +60,15 @@ st.markdown("""
         padding: 1.5rem !important;
     }
 
-    /* Force ALL nested child divs inside the dropzone to be white */
-    div[data-testid="stFileUploaderDropzone"] div {
-        background-color: #FFFFFF !important;
-        background: #FFFFFF !important;
-    }
-    
-    /* Force ALL text, labels, and metadata inside the dropzone to be dark charcoal */
-    div[data-testid="stFileUploaderDropzone"] p,
-    div[data-testid="stFileUploaderDropzone"] span,
-    div[data-testid="stFileUploaderDropzone"] div,
-    div[data-testid="stFileUploaderDropzone"] label {
+    /* Force ALL nested child elements inside the dropzone */
+    div[data-testid="stFileUploaderDropzone"] * {
+        background-color: transparent !important;
         color: #1F2937 !important;
         opacity: 1 !important;
         font-weight: 600 !important;
     }
     
-    /* Force the "Upload" button to have a coral background and white text */
+    /* Force the "Browse files" / upload button style */
     div[data-testid="stFileUploaderDropzone"] button,
     div[data-testid="stFileUploader"] button {
         background-color: #FF6B6B !important;
@@ -55,17 +78,9 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* 3. HIDE THEME TOGGLE & SETTINGS THEME OPTIONS COMPLETELY */
-    .stThemeToggle {
-        display: none !important;
-    }
-
-    /* Hide theme options / radio toggles within the main settings popover menu */
-    div[role="menu"] div:has(input[type="radio"]) {
-        display: none !important;
-    }
-
-    /* 4. STYLE THE REMAINING SETTINGS MENU (Rerun, Clear cache, Print, etc.) */
+    /* ---------------------------------------------------- */
+    /* SETTINGS MENU DROPDOWN STYLING                       */
+    /* ---------------------------------------------------- */
     div[role="menu"] {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
@@ -89,15 +104,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. SIMPLE UI
+# 3. APP UI & UPLOAD LOGIC
 st.title("🏛️ CivicClear AI")
-st.write("Upload a notice to test the white uploader bar:")
+st.write("Upload a notice to test the white uploader bar and light-mode layout:")
 
 uploaded_file = st.file_uploader("Upload Notice (Image or PDF)...", type=['jpg', 'png', 'jpeg', 'pdf'])
 
 if uploaded_file:
     st.success("File uploaded successfully!")
-    # Display image if it's an image
+    
+    # Display image preview if uploaded file is an image format
     if uploaded_file.type.startswith('image'):
-        image = Image.open(uploaded_file)
-        st.image(image, use_container_width=True)
+        try:
+            image = Image.open(uploaded_file)
+            st.image(image, caption="Uploaded Notice Preview", use_container_width=True)
+        except Exception as e:
+            st.error(f"Error loading image: {e}")
+    else:
+        st.info("PDF document uploaded. Ready for processing logic.")
