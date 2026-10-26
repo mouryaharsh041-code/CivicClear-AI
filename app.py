@@ -6,7 +6,7 @@ import base64
 # 1. PAGE CONFIG
 st.set_page_config(page_title="CivicClear AI", layout="wide")
 
-# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE, HIDE THEME SWITCHER, AND FIX THE BLACK UPLOADER
+# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE AND HIDE THEME SWITCHER
 st.markdown("""
     <style>
     /* Force global light theme on html, body, and main app container */
@@ -55,19 +55,17 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* 3. HIDE ONLY THE THEME SWITCHER (SYSTEM, LIGHT, DARK BUTTONS) */
-    /* Target the standard Streamlit theme toggle container inside the settings menu */
+    /* 3. HIDE THEME TOGGLE & SETTINGS THEME OPTIONS COMPLETELY */
     .stThemeToggle {
         display: none !important;
     }
 
-    /* Hide the horizontal separator line that follows the theme switcher */
-    .stMenu > hr {
+    /* Hide theme options / radio toggles within the main settings popover menu */
+    div[role="menu"] div:has(input[type="radio"]) {
         display: none !important;
     }
 
     /* 4. STYLE THE REMAINING SETTINGS MENU (Rerun, Clear cache, Print, etc.) */
-    /* Force the dropdown popup to have a clean white background */
     div[role="menu"] {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
@@ -76,7 +74,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
     }
 
-    /* Force all text inside the dropdown menu to be dark charcoal */
     div[role="menu"] span,
     div[role="menu"] div,
     div[role="menuitem"],
@@ -85,7 +82,6 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* Hover effect when moving cursor over dropdown options */
     div[role="menuitem"]:hover {
         background-color: #F3F4F6 !important;
         color: #111827 !important;
@@ -103,4 +99,5 @@ if uploaded_file:
     st.success("File uploaded successfully!")
     # Display image if it's an image
     if uploaded_file.type.startswith('image'):
-        st.image(uploaded_file)
+        image = Image.open(uploaded_file)
+        st.image(image, use_container_width=True)
