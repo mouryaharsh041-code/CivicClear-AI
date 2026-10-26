@@ -20,47 +20,35 @@ st.markdown("""
     }
 
     /* ---------------------------------------------------- */
-    /* HIDE THEME SELECTOR ENTIRELY                         */
+    /* HIDE THEME SELECTOR ENTIRELY (INCLUDING DROPDOWN)     */
     /* ---------------------------------------------------- */
-    /* Hide top header theme toggle button if present */
     [data-testid="stThemeToggle"], .stThemeToggle {
         display: none !important;
     }
 
-    /* Hide theme options / text within the settings modal or popover */
-    [data-testid="stSettingsDialog"] [data-testid="stMarkdownContainer"]:has(span:contains("Theme")),
-    [data-testid="stSettingsDialog"] div:has(> label:contains("Theme")),
-    div[role="dialog"] div:has(input[name="theme"]) {
-        display: none !important;
-    }
-
-    /* Target theme selection section in standard popover/dropdown menus */
-    li:has(span:contains("Light")),
-    li:has(span:contains("Dark")),
-    li:has(span:contains("Use system setting")),
-    div[role="menuitem"]:has(span:contains("Theme")),
-    div[role="radiogroup"]:has(input[name*="theme"]) {
+    /* Target and remove the System / Light / Dark theme block inside the settings menu */
+    div[role="menu"] div:has(button:contains("System")),
+    div[role="menu"] div:has(button:contains("Light")),
+    div[role="menu"] div:has(button:contains("Dark")),
+    div[role="menu"] > div:first-child:has(button) {
         display: none !important;
     }
 
     /* ---------------------------------------------------- */
     /* FILE UPLOADER STYLING                                */
     /* ---------------------------------------------------- */
-    /* Force the outer uploader container to pure white */
     div[data-testid="stFileUploader"] {
         background-color: #FFFFFF !important;
         border: 2px dashed #FF6B6B !important;
         border-radius: 12px !important;
     }
 
-    /* Force the inner dropzone to pure white */
     div[data-testid="stFileUploaderDropzone"] {
         background-color: #FFFFFF !important;
         border: none !important;
         padding: 1.5rem !important;
     }
 
-    /* Force ALL nested child elements inside the dropzone */
     div[data-testid="stFileUploaderDropzone"] * {
         background-color: transparent !important;
         color: #1F2937 !important;
@@ -68,7 +56,6 @@ st.markdown("""
         font-weight: 600 !important;
     }
     
-    /* Force the "Browse files" / upload button style */
     div[data-testid="stFileUploaderDropzone"] button,
     div[data-testid="stFileUploader"] button {
         background-color: #FF6B6B !important;
@@ -113,7 +100,6 @@ uploaded_file = st.file_uploader("Upload Notice (Image or PDF)...", type=['jpg',
 if uploaded_file:
     st.success("File uploaded successfully!")
     
-    # Display image preview if uploaded file is an image format
     if uploaded_file.type.startswith('image'):
         try:
             image = Image.open(uploaded_file)
