@@ -368,7 +368,7 @@ def get_available_gemini_models(api_key):
     return ["gemini-2.0-flash","gemini-1.5-flash"]
 
 # =========================================================
-# === CORE ANALYSIS PIPELINE (WITH TRANSPARENT ERRORS) ===
+# === CORE ANALYSIS PIPELINE (WITH SILENT RETRIES & SAFE PARSING) ===
 # =========================================================
 def analyze_notice():
     if st.session_state.pil_image is None and st.session_state.pdf_text is None:
@@ -416,9 +416,11 @@ def analyze_notice():
                                 used_model = f"OpenRouter ({model})"
                                 break
                     else:
-                        st.warning(f"OpenRouter model {model} returned status {r.status_code}: {r.text[:150]}", icon="⚠️")
+                        # Silent retry on 502/503
+                        pass
                 except Exception as e:
-                    st.warning(f"OpenRouter connection warning for {model}: {e}", icon="⚠️")
+                    # Silent retry on connection errors
+                    pass
 
         if not raw_text and gemini_key:
             models = get_available_gemini_models(gemini_key)
@@ -441,9 +443,9 @@ def analyze_notice():
                                 used_model = f"Gemini ({m})"
                                 break
                     else:
-                        st.warning(f"Gemini model {m} returned status {r.status_code}: {r.text[:150]}", icon="⚠️")
+                        pass
                 except Exception as e:
-                    st.warning(f"Gemini connection warning for {m}: {e}", icon="⚠️")
+                    pass
 
         if raw_text:
             status.update(label=f"Text extraction complete via {used_model}", state="complete")
@@ -452,7 +454,7 @@ def analyze_notice():
             st.error("❌ **OCR Extraction Failed:** Please verify that your API keys are correct, have active quota, and that your connection is stable.")
             return
 
-    # Step 2: Extract structured fields in English
+    # Step 2: Extract structured fields in English (With Safe JSON Parsing & Silent Retries)
     en_structured = None
     with st.status("Extracting structured fields...", expanded=True) as status:
         if openrouter_key:
@@ -471,11 +473,18 @@ def analyze_notice():
             try:
                 r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                 if r.status_code == 200:
-                    en_structured = r.json()['choices'][0]['message']['content']
+                    res_data = r.json()
+                    if 'choices' in res_data and len(res_data['choices']) > 0:
+                        en_structured = res_data['choices'][0]['message']['content']
+                    else:
+                        # Silent fail to try next model
+                        pass
                 else:
-                    st.warning(f"Structured extraction status {r.status_code}: {r.text[:150]}", icon="⚠️")
+                    # Silent fail to try next model (e.g. on 502)
+                    pass
             except Exception as e:
-                st.warning(f"Structured extraction error: {e}", icon="⚠️")
+                # Silent fail to try next model
+                pass
         
         if not en_structured and gemini_key:
             models = get_available_gemini_models(gemini_key)
@@ -485,10 +494,12 @@ def analyze_notice():
                 try:
                     r = requests.post(url, json=payload, timeout=30)
                     if r.status_code == 200:
-                        en_structured = r.json()['candidates'][0]['content']['parts'][0]['text']
-                        break
+                        res_data = r.json()
+                        if 'candidates' in res_data and len(res_data['candidates']) > 0:
+                            en_structured = res_data['candidates'][0]['content']['parts'][0]['text']
+                            break
                 except Exception as e:
-                    st.warning(f"Gemini structured fallback error: {e}", icon="⚠️")
+                    pass
 
         if en_structured:
             status.update(label="Structured extraction complete", state="complete")
@@ -497,11 +508,13 @@ def analyze_notice():
             st.error("❌ **Structuring Failed:** The AI model could not structure the extracted text fields.")
             return
 
-    # Step 3: Translate to Hindi if selected
+    # Step 3: Translate to Hindi if selected (With Safe JSON Parsing)
     final_result = en_structured
     if en_structured and current_lang == "Hindi":
         with st.status("Translating to Hindi...", expanded=True) as trans_status:
             translated = False
+            
+            # Try OpenRouter first
             if openrouter_key:
                 try:
                     headers = {
@@ -518,13 +531,18 @@ def analyze_notice():
                     }
                     r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                     if r.status_code == 200:
-                        final_result = r.json()['choices'][0]['message']['content']
-                        translated = True
+                        res_data = r.json()
+                        if 'choices' in res_data and len(res_data['choices']) > 0:
+                            final_result = res_data['choices'][0]['message']['content']
+                            translated = True
                     else:
-                        st.warning(f"Translation API status {r.status_code}: {r.text[:150]}", icon="⚠️")
+                        # Silent fail to keep UI clean
+                        pass
                 except Exception as e:
-                    st.warning(f"Translation exception: {e}", icon="⚠️")
+                    # Silent fail to keep UI clean
+                    pass
             
+            # Fallback to Gemini if OpenRouter failed or not configured
             if not translated and gemini_key:
                 try:
                     models = get_available_gemini_models(gemini_key)
@@ -533,16 +551,19 @@ def analyze_notice():
                         payload = {"contents":[{"parts":[{"text": build_translation_prompt(en_structured)}]}]}
                         r = requests.post(url, json=payload, timeout=30)
                         if r.status_code == 200:
-                            final_result = r.json()['candidates'][0]['content']['parts'][0]['text']
-                            translated = True
-                            break
+                            res_data = r.json()
+                            if 'candidates' in res_data and len(res_data['candidates']) > 0:
+                                final_result = res_data['candidates'][0]['content']['parts'][0]['text']
+                                translated = True
+                                break
                 except Exception as e:
-                    st.warning(f"Gemini translation fallback exception: {e}", icon="⚠️")
+                    # Silent fail to keep UI clean
+                    pass
 
             if translated:
                 trans_status.update(label="Translation complete!", state="complete")
             else:
-                trans_status.update(label="Translation failed, showing fallback", state="error")
+                trans_status.update(label="Translation failed. Showing English fallback.", state="error")
 
     # Step 4: Parse structured result & save to DB
     if final_result:
