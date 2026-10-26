@@ -742,33 +742,55 @@ def analyze_notice():
             status.update(label="Failed to extract structured fields.", state="error")
             return
 
-    # Step 3: Translate to Hindi if needed
+    # Step 3: Translate to Hindi if needed (Robust Dual-Provider Routing)
     final_result = en_structured
     if en_structured and current_lang == "Hindi":
         with st.status("Translating to Hindi (preserving structure)...", expanded=True) as trans_status:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {openrouter_key or gemini_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://civicclear-ai.streamlit.app",
-                    "X-Title": "CivicClear AI"
-                }
-                # Dynamically select model (no hardcoding!)
-                model_to_use_trans = get_best_openrouter_model(openrouter_key, supports_image=False)
-                payload = {
-                    "model": model_to_use_trans, 
-                    "max_tokens": 2048,
-                    "messages": [{"role":"user","content": build_translation_prompt(en_structured)}]
-                }
-                # Use OpenRouter for translation
-                r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
-                if r.status_code == 200:
-                    final_result = r.json()['choices'][0]['message']['content']
-                    trans_status.update(label="Translation complete!", state="complete")
-                else:
-                    trans_status.update(label="Translation failed, showing English fallback", state="error")
-            except Exception as e:
-                trans_status.update(label=f"Translation error: {e}", state="error")
+            translated = False
+            
+            # Try OpenRouter first
+            if openrouter_key:
+                try:
+                    headers = {
+                        "Authorization": f"Bearer {openrouter_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://civicclear-ai.streamlit.app",
+                        "X-Title": "CivicClear AI"
+                    }
+                    model_to_use_trans = get_best_openrouter_model(openrouter_key, supports_image=False)
+                    payload = {
+                        "model": model_to_use_trans, 
+                        "max_tokens": 2048,
+                        "messages": [{"role":"user","content": build_translation_prompt(en_structured)}]
+                    }
+                    r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
+                    if r.status_code == 200:
+                        final_result = r.json()['choices'][0]['message']['content']
+                        translated = True
+                    else:
+                        trans_status.update(label=f"OpenRouter translation failed: {r.text[:100]}")
+                except Exception as e:
+                    trans_status.update(label=f"OpenRouter translation error: {e}")
+            
+            # Fallback to Gemini if OpenRouter failed or not configured
+            if not translated and gemini_key:
+                try:
+                    models = get_available_gemini_models(gemini_key)
+                    for m in models:
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
+                        payload = {"contents":[{"parts":[{"text": build_translation_prompt(en_structured)}]}]}
+                        r = requests.post(url, json=payload, timeout=30)
+                        if r.status_code == 200:
+                            final_result = r.json()['candidates'][0]['content']['parts'][0]['text']
+                            translated = True
+                            break
+                except Exception as e:
+                    trans_status.update(label=f"Gemini translation error: {e}")
+
+            if translated:
+                trans_status.update(label="Translation complete!", state="complete")
+            else:
+                trans_status.update(label="Translation failed, showing English fallback", state="error")
 
     # Step 4: Parse the structured result and save to database
     if final_result:
