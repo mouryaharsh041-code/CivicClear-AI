@@ -410,6 +410,18 @@ st.markdown("""
         background-color: #F3F4F6 !important;
         color: #111827 !important;
     }
+
+    /* 11. HIDE ONLY THE THEME SWITCHER (SYSTEM, LIGHT, DARK BUTTONS) */
+    /* Target the standard Streamlit theme toggle container */
+    .stThemeToggle,
+    div[data-testid="stThemeToggle"] {
+        display: none !important;
+    }
+
+    /* Hide the horizontal divider line below the theme switcher if it remains visible */
+    div[data-testid="stMenu"] > hr {
+        display: none !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
