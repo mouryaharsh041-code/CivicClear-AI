@@ -2,5 +2,6 @@ streamlit
 groq
 gTTS
 Pillow
-pymupdf==1.23.24
+pymupdf
+pypdf
 requests
