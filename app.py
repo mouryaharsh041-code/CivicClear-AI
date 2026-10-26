@@ -588,8 +588,16 @@ def analyze_notice():
     # Step 1: Extract raw text from the image/PDF
     with st.status(L["analyzing"], expanded=True) as status:
         status.update(label="Extracting raw text from document...")
+        
+        # --- Try OpenRouter First ---
         if openrouter_key:
-            headers = {"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"}
+            # Mandatory headers for OpenRouter
+            headers = {
+                "Authorization": f"Bearer {openrouter_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://civicclear-ai.streamlit.app", 
+                "X-Title": "CivicClear AI"
+            }
             content_payload = [{"type": "text", "text": build_ocr_prompt()}]
             if st.session_state.pdf_text:
                 content_payload[0]["text"] = f"Extract all text from this PDF:\n\n{st.session_state.pdf_text}"
@@ -604,9 +612,15 @@ def analyze_notice():
                     if r.status_code == 200:
                         c = r.json()['choices'][0]['message']['content']
                         if c and len(c.strip()) > 50:
-                            raw_text = c; used_model = f"OpenRouter ({model})"; break
-                except: continue
+                            raw_text = c
+                            used_model = f"OpenRouter ({model})"
+                            break
+                    else:
+                        status.update(label=f"OpenRouter model {model} failed with status {r.status_code}")
+                except Exception as e:
+                    status.update(label=f"OpenRouter connection error: {e}")
 
+        # --- Fallback to Gemini ---
         if not raw_text and gemini_key:
             models = get_available_gemini_models(gemini_key)
             for m in models:
@@ -622,39 +636,82 @@ def analyze_notice():
                     if r.status_code == 200:
                         c = r.json()['candidates'][0]['content']['parts'][0]['text']
                         if c and len(c.strip()) > 50:
-                            raw_text = c; used_model = f"Gemini ({m})"; break
-                except: continue
+                            raw_text = c
+                            used_model = f"Gemini ({m})"
+                            break
+                    else:
+                        status.update(label=f"Gemini model {m} failed with status {r.status_code}")
+                except Exception as e:
+                    status.update(label=f"Gemini connection error: {e}")
 
         if raw_text:
             status.update(label=f"Text extraction complete via {used_model}", state="complete")
         else:
-            status.update(label="Failed to extract text", state="error")
+            status.update(label="Failed to extract text. Check API keys or internet connection.", state="error")
             return
 
     # Step 2: Extract structured fields from raw text
     en_structured = None
     with st.status("Extracting structured fields...", expanded=True) as status:
-        headers = {"Authorization": f"Bearer {openrouter_key or gemini_key}", "Content-Type": "application/json"}
-        payload = {"model": "meta-llama/llama-3.2-11b-vision-instruct", "max_tokens": 2048,
-                   "messages": [{"role":"user","content": build_structured_extraction_prompt(raw_text)}]}
-        try:
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
-            if r.status_code == 200:
-                en_structured = r.json()['choices'][0]['message']['content']
-                status.update(label="Structured extraction complete", state="complete")
-            else:
-                status.update(label="Structured extraction failed", state="error")
-        except Exception as e:
-            status.update(label=f"Error: {e}", state="error")
+        # Use OpenRouter for structured extraction if key exists, otherwise try Gemini text model
+        if openrouter_key:
+            headers = {
+                "Authorization": f"Bearer {openrouter_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://civicclear-ai.streamlit.app",
+                "X-Title": "CivicClear AI"
+            }
+            payload = {
+                "model": "meta-llama/llama-3.2-11b-vision-instruct", 
+                "max_tokens": 2048,
+                "messages": [{"role":"user","content": build_structured_extraction_prompt(raw_text)}]
+            }
+            try:
+                r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
+                if r.status_code == 200:
+                    en_structured = r.json()['choices'][0]['message']['content']
+                else:
+                    status.update(label=f"OpenRouter structured extraction failed: {r.text[:100]}")
+            except Exception as e:
+                status.update(label=f"OpenRouter structured extraction error: {e}")
+        
+        # Fallback to Gemini if OpenRouter failed or not configured
+        if not en_structured and gemini_key:
+            models = get_available_gemini_models(gemini_key)
+            for m in models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
+                payload = {"contents":[{"parts":[{"text": build_structured_extraction_prompt(raw_text)}]}]}
+                try:
+                    r = requests.post(url, json=payload, timeout=30)
+                    if r.status_code == 200:
+                        en_structured = r.json()['candidates'][0]['content']['parts'][0]['text']
+                        break
+                except Exception as e:
+                    pass
+
+        if en_structured:
+            status.update(label="Structured extraction complete", state="complete")
+        else:
+            status.update(label="Failed to extract structured fields.", state="error")
+            return
 
     # Step 3: Translate to Hindi if needed
     final_result = en_structured
     if en_structured and current_lang == "Hindi":
         with st.status("Translating to Hindi (preserving structure)...", expanded=True) as trans_status:
             try:
-                headers = {"Authorization": f"Bearer {openrouter_key or gemini_key}", "Content-Type": "application/json"}
-                payload = {"model": "meta-llama/llama-3.2-11b-vision-instruct", "max_tokens": 2048,
-                           "messages": [{"role":"user","content": build_translation_prompt(en_structured)}]}
+                headers = {
+                    "Authorization": f"Bearer {openrouter_key or gemini_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://civicclear-ai.streamlit.app",
+                    "X-Title": "CivicClear AI"
+                }
+                payload = {
+                    "model": "meta-llama/llama-3.2-11b-vision-instruct", 
+                    "max_tokens": 2048,
+                    "messages": [{"role":"user","content": build_translation_prompt(en_structured)}]
+                }
+                # Use OpenRouter for translation
                 r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                 if r.status_code == 200:
                     final_result = r.json()['choices'][0]['message']['content']
@@ -664,7 +721,7 @@ def analyze_notice():
             except Exception as e:
                 trans_status.update(label=f"Translation error: {e}", state="error")
 
-    # Step 4: Parse the structured result
+    # Step 4: Parse the structured result and save to database
     if final_result:
         st.session_state.raw_result = final_result
 
@@ -673,7 +730,7 @@ def analyze_notice():
         nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', final_result, re.DOTALL|re.IGNORECASE)
         cl = re.search(r'CHECKLIST:\s*(.*?)(?=\nNOTE:|\Z)', final_result, re.DOTALL|re.IGNORECASE)
 
-        summary = sm.group(1).strip() if sm else "No summary."
+        summary = sm.group(1).strip() if sm else "No summary available."
         deadline_text = dl.group(1).strip() if dl else "Not specified"
         note = nt.group(1).strip() if nt else "None"
         checklist_raw = cl.group(1).strip() if cl else ""
@@ -682,13 +739,11 @@ def analyze_notice():
         items = []
         for line in checklist_raw.split('\n'):
             line = line.strip()
-            # Match lines starting with a number followed by a dot or parenthesis
             match = re.match(r'^\s*(?:\d+[\)\.]|\*|\-)\s+(.*)', line)
             if match:
                 clean = match.group(1).strip()
                 if clean:
                     items.append(clean)
-            # Fallback: if no number, but line is not empty and not a header
             elif line and not re.match(r'^(CHECKLIST|NOTE|SUMMARY|DEADLINE)', line, re.IGNORECASE):
                 items.append(line)
 
@@ -916,13 +971,15 @@ with tab_analyze:
 
     if st.session_state.raw_result:
         raw_result = st.session_state.raw_result
+        
+        # Use regex to safely extract fields; fallback to raw text if regex misses
         sm = re.search(r'SUMMARY:\s*(.*?)(?=\nDEADLINE:|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
         dl = re.search(r'DEADLINE:\s*(.*?)(?=\nCHECKLIST:|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
         nt = re.search(r'NOTE:\s*(.*?)(?=\Z)', raw_result, re.DOTALL|re.IGNORECASE)
 
-        summary = sm.group(1).strip() if sm else raw_result[:200]
+        summary = sm.group(1).strip() if sm else raw_result[:300] # Fallback to start of text
         deadline = dl.group(1).strip() if dl else "Not specified"
-        note = nt.group(1).strip() if nt else "None"
+        note = nt.group(1).strip() if nt else "No specific warnings noted."
 
         st.markdown(f"### {L['summary_header']}")
         st.info(summary)
