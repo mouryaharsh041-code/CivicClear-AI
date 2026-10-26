@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Programmatically attempt to lock the base theme to light
+# Programmatically lock the base theme to light
 try:
     st.config_set('theme.base', 'light')
 except Exception:
@@ -420,6 +420,18 @@ st.markdown("""
     div[role="menuitem"]:hover {
         background-color: #F3F4F6 !important;
         color: #111827 !important;
+    }
+
+    /* 11. HIDE ONLY THE THEME SWITCHER (SYSTEM, LIGHT, DARK BUTTONS) */
+    /* Target the standard Streamlit theme toggle container inside the menu */
+    .stThemeToggle,
+    div[data-testid="stThemeToggle"] {
+        display: none !important;
+    }
+
+    /* Hide the horizontal divider line that separates the theme switcher from other options */
+    div[role="menu"] > hr {
+        display: none !important;
     }
     </style>
 """, unsafe_allow_html=True)
