@@ -6,7 +6,7 @@ import base64
 # 1. PAGE CONFIG
 st.set_page_config(page_title="CivicClear AI", layout="wide")
 
-# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE, FIX THE BLACK UPLOADER, AND HIDE THE THEME SWITCHER
+# 2. AGGRESSIVE CSS TO FORCE LIGHT MODE, HIDE THEME SWITCHER, AND FIX THE BLACK UPLOADER
 st.markdown("""
     <style>
     /* Force global light theme on html, body, and main app container */
@@ -57,13 +57,12 @@ st.markdown("""
 
     /* 3. HIDE ONLY THE THEME SWITCHER (SYSTEM, LIGHT, DARK BUTTONS) */
     /* Target the standard Streamlit theme toggle container inside the settings menu */
-    .stThemeToggle,
-    div[data-testid="stThemeToggle"] {
+    .stThemeToggle {
         display: none !important;
     }
 
     /* Hide the horizontal separator line that follows the theme switcher */
-    div[role="menu"] > hr {
+    .stMenu > hr {
         display: none !important;
     }
 
