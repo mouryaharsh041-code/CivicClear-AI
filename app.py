@@ -5,7 +5,6 @@ import io
 import json
 import os
 from PIL import Image
-import fitz  # PyMuPDF
 from gtts import gTTS
 import requests
 from datetime import date
@@ -149,7 +148,7 @@ LOGO_HTML = """
 </div>
 """
 
-# --- PREMIUM CSS (WARM MINIMALIST THEME + UPLOADER FIX + INPUT VISIBILITY FIX) ---
+# --- PREMIUM CSS (WARM MINIMALIST THEME + UPLOADER FIX + INPUT VISIBILITY FIX + DROPDOWN FIX) ---
 st.markdown("""
     <style>
     /* 1. FORCE LIGHT MODE GLOBALLY TO PREVENT DARK THEME CONFLICTS */
@@ -349,6 +348,40 @@ st.markdown("""
         opacity: 1 !important;
         font-weight: 600;
     }
+
+    /* 9. DROPDOWN LIST POPUP CONTRAST FIX (White background, black text) */
+    .stSelectbox [data-baseweb="select"] [role="listbox"],
+    .stSidebar .stSelectbox [data-baseweb="select"] [role="listbox"] {
+        background-color: #FFFFFF !important;
+        color: #1F2937 !important;
+        border: 1px solid #E5E7EB !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Target individual dropdown options inside the popup list */
+    .stSelectbox [data-baseweb="select"] [role="option"],
+    .stSidebar .stSelectbox [data-baseweb="select"] [role="option"] {
+        background-color: #FFFFFF !important;
+        color: #1F2937 !important;
+        font-weight: 600 !important;
+        padding: 10px 14px !important;
+        margin: 2px 0 !important;
+    }
+
+    /* Hover effect when moving cursor over dropdown options */
+    .stSelectbox [data-baseweb="select"] [role="option"]:hover,
+    .stSidebar .stSelectbox [data-baseweb="select"] [role="option"]:hover {
+        background-color: #F3F4F6 !important; /* Light grey hover background */
+        color: #111827 !important;
+    }
+
+    /* Selected/Active option highlight state */
+    .stSelectbox [data-baseweb="select"] [aria-selected="true"],
+    .stSidebar .stSelectbox [data-baseweb="select"] [aria-selected="true"] {
+        background-color: rgba(255, 107, 107, 0.1) !important;
+        color: #D9534F !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -362,6 +395,7 @@ if 'show_uploader' not in st.session_state: st.session_state.show_uploader = Tru
 if 'audio_generated_for_lang' not in st.session_state: st.session_state.audio_generated_for_lang = None
 if 'audio_version' not in st.session_state: st.session_state.audio_version = 0
 if 'confirm_delete_id' not in st.session_state: st.session_state.confirm_delete_id = None
+if 'pdf_text' not in st.session_state: st.session_state.pdf_text = None
 
 # --- HINDI DATE TRANSLATOR ---
 def translate_date_to_hindi(date_str):
@@ -462,7 +496,7 @@ def get_available_gemini_models(api_key):
 
 # --- CORE ANALYSIS ---
 def analyze_notice():
-    if st.session_state.pil_image is None:
+    if st.session_state.pil_image is None and st.session_state.pdf_text is None:
         st.error(L["upload_first"])
         return
 
@@ -480,12 +514,17 @@ def analyze_notice():
         if openrouter_key:
             status.update(label=L["try_openrouter"])
             headers = {"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"}
+            
+            # If PDF text fallback exists, send text; otherwise send image
+            content_payload = [{"type": "text", "text": build_prompt(current_lang)}]
+            if st.session_state.pdf_text:
+                content_payload[0]["text"] = f"Analyze the following notice text:\n\n{st.session_state.pdf_text}\n\n{build_prompt(current_lang)}"
+            else:
+                content_payload.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
+
             for model in get_active_free_vision_models():
                 payload = {"model": model, "max_tokens": 2048,
-                           "messages": [{"role":"user","content":[
-                               {"type":"text","text":build_prompt(current_lang)},
-                               {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{img_b64}"}}
-                           ]}]}
+                           "messages": [{"role":"user","content": content_payload}]}
                 try:
                     r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=30)
                     if r.status_code == 200:
@@ -499,7 +538,14 @@ def analyze_notice():
             models = get_available_gemini_models(gemini_key)
             for m in models:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
-                payload = {"contents":[{"parts":[{"text":build_prompt(current_lang)},{"inline_data":{"mime_type":"image/jpeg","data":img_b64}}]}]}
+                
+                content_parts = [{"text": build_prompt(current_lang)}]
+                if st.session_state.pdf_text:
+                    content_parts.insert(0, {"text": f"Notice text to analyze:\n{st.session_state.pdf_text}\n\n"})
+                else:
+                    content_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
+
+                payload = {"contents":[{"parts": content_parts}]}
                 try:
                     r = requests.post(url, json=payload, timeout=30)
                     if r.status_code == 200:
@@ -686,24 +732,46 @@ tab_analyze, tab_active, tab_approach, tab_expired, tab_imp = st.tabs(tab_labels
 # ================= TAB 1: ANALYZE =================
 with tab_analyze:
     if st.session_state.show_uploader:
-        f = st.file_uploader(L["uploader_label"], type=['jpg','png','jpeg','pdf'])
+        f = st.file_uploader(L["uploader_label"], type=['jpg', 'png', 'jpeg', 'pdf'])
         if f:
             with st.status(L["processing"], expanded=True) as stt:
                 try:
                     if f.type == "application/pdf":
-                        doc = fitz.open(stream=f.read(), filetype="pdf")
-                        pix = doc.load_page(0).get_pixmap()
-                        st.session_state.pil_image = Image.frombytes("RGB",[pix.width,pix.height],pix.samples)
+                        # Try PyMuPDF (fitz) first for high-quality image conversion
+                        try:
+                            import fitz
+                            doc = fitz.open(stream=f.read(), filetype="pdf")
+                            pix = doc.load_page(0).get_pixmap()
+                            st.session_state.pil_image = Image.frombytes("RGB",[pix.width,pix.height],pix.samples)
+                            st.session_state.pdf_text = None
+                            stt.update(label="PDF processed via PyMuPDF (Image)", state="complete")
+                        except Exception as fitz_err:
+                            # Fallback: Extract text directly using pypdf
+                            from pypdf import PdfReader
+                            f.seek(0)
+                            reader = PdfReader(f)
+                            text = ""
+                            for page in reader.pages:
+                                text += page.extract_text() or ""
+                            
+                            st.session_state.pil_image = None
+                            st.session_state.pdf_text = text
+                            stt.update(label="PDF processed via pypdf (Text fallback)", state="complete")
                     else:
                         f.seek(0)
                         st.session_state.pil_image = Image.open(f)
-                    img = st.session_state.pil_image
-                    img.thumbnail((1024,1024))
-                    if img.mode in ("RGBA","P"): img = img.convert("RGB")
-                    buf = io.BytesIO(); img.save(buf,format="JPEG")
-                    st.session_state.img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                        st.session_state.pdf_text = None
+                        stt.update(label=L["ready"], state="complete")
+                    
+                    # Standardize image if it exists
+                    if st.session_state.pil_image:
+                        img = st.session_state.pil_image
+                        img.thumbnail((1024,1024))
+                        if img.mode in ("RGBA","P"): img = img.convert("RGB")
+                        buf = io.BytesIO(); img.save(buf,format="JPEG")
+                        st.session_state.img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                    
                     st.session_state.show_uploader = False
-                    stt.update(label=L["ready"], state="complete")
                     st.rerun()
                 except Exception as e:
                     stt.update(label=f"Error: {e}", state="error")
@@ -719,6 +787,7 @@ with tab_analyze:
                 st.session_state.raw_result = None
                 st.session_state.checklist_items = []
                 st.session_state.audio_bytes = None
+                st.session_state.pdf_text = None
                 st.rerun()
         with col_btn:
             if not st.session_state.raw_result:
