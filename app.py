@@ -101,13 +101,6 @@ EN = {
     "analyzing": "Analyzing document...",
     "audio_err": "Audio generation error: {e}",
     "no_deadline": "No deadline mentioned",
-    "confirm_delete_msg": "Are you sure you want to delete this notice?",
-    "btn_yes": "Yes, Delete",
-    "btn_cancel": "Cancel",
-    "helper_title": "Get 100% Free API Keys:",
-    "helper_openrouter": "OpenRouter (Primary)",
-    "helper_gemini": "Google Gemini (Backup)",
-    "helper_note": "*Both tiers are completely free.*",
 }
 
 HI = {
@@ -144,13 +137,6 @@ HI = {
     "analyzing": "दस्तावेज़ का विश्लेषण हो रहा है...",
     "audio_err": "ऑडियो जनरेशन त्रुटि: {e}",
     "no_deadline": "कोई अंतिम तिथि नहीं",
-    "confirm_delete_msg": "क्या आप वाकई इस नोटिस को हटाना चाहते हैं?",
-    "btn_yes": "हाँ, हटाएँ",
-    "btn_cancel": "रद्द करें",
-    "helper_title": "100% निःशुल्क एपीआई कुंजियाँ प्राप्त करें:",
-    "helper_openrouter": "ओपनराउटर (प्राथमिक)",
-    "helper_gemini": "गूगल जेमिनी (बैकअप)",
-    "helper_note": "*दोनों स्तर पूरी तरह निःशुल्क हैं।*",
 }
 
 # =========================================================
@@ -214,15 +200,6 @@ st.markdown("""
     .stButton>button:hover {
         background: #E55A52 !important;
     }
-    .stThemeToggle, div[data-testid="stThemeToggle"] {
-        display: none !important;
-    }
-    div[role="menu"] > div:first-child {
-        display: none !important;
-    }
-    div[role="menu"] > hr:first-of-type {
-        display: none !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -235,9 +212,8 @@ if 'audio_bytes' not in st.session_state: st.session_state.audio_bytes = None
 if 'show_uploader' not in st.session_state: st.session_state.show_uploader = True
 if 'audio_generated_for_lang' not in st.session_state: st.session_state.audio_generated_for_lang = None
 if 'audio_version' not in st.session_state: st.session_state.audio_version = 0
-if 'confirm_delete_id' not in st.session_state: st.session_state.confirm_delete_id = None
 if 'pdf_text' not in st.session_state: st.session_state.pdf_text = None
-if 'previous_lang' not in st.session_state: st.session_state.previous_lang = None
+if 'previous_lang' not in st.session_state: st.session_state.previous_lang = current_lang
 
 def translate_date_to_hindi(date_str):
     if not date_str or date_str.lower() == "not specified":
@@ -249,73 +225,197 @@ def translate_date_to_hindi(date_str):
             'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर'
         ]
         return f"{d.day} {months_hi[d.month - 1]} {d.year}"
-    except:
+    except Exception:
         return date_str
 
-def get_best_openrouter_model(api_key, supports_image=False):
+# =========================================================
+# === DYNAMIC MODEL DISCOVERY & AUTO-FAILOVER ===
+# =========================================================
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_available_openrouter_models(api_key: str, supports_image: bool = False) -> list:
+    """Queries OpenRouter live to discover all currently available free models."""
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    scored_models = []
     try:
         resp = requests.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=10)
         if resp.status_code == 200:
-            models = resp.json().get('data', [])
-            candidates = []
+            models = resp.json().get("data", [])
             for m in models:
-                mid = m.get('id', '')
-                pricing = m.get('pricing', {})
-                is_free = float(pricing.get('prompt', 1)) == 0.0 and float(pricing.get('completion', 1)) == 0.0
-                arch = m.get('architecture', {})
-                modalities = arch.get('modalities', [])
-                supports_img = 'image' in modalities or 'vision' in mid.lower() or 'vl' in mid.lower() or 'gemini' in mid.lower()
-                if is_free:
-                    if supports_image and not supports_img: continue
-                    candidates.append(mid)
-            priorities = ["google/gemini-2.0-flash-lite-001:free", "google/gemini-flash-1.5:free", "meta-llama/llama-3.2-11b-vision-instruct:free"]
-            for p in priorities:
-                if p in candidates: return p
-            if candidates: return candidates[0]
+                mid = m.get("id", "")
+                if not mid:
+                    continue
+                pricing = m.get("pricing", {})
+                try:
+                    is_free = float(pricing.get("prompt", 1)) == 0.0 and float(pricing.get("completion", 1)) == 0.0
+                except (ValueError, TypeError):
+                    is_free = mid.endswith(":free")
+
+                if not is_free:
+                    continue
+
+                arch = m.get("architecture", {})
+                input_mods = arch.get("input_modalities", []) or arch.get("modalities", [])
+                modality_str = str(arch.get("modality", "")).lower()
+                has_vision = (
+                    "image" in input_mods
+                    or "image" in modality_str
+                    or any(k in mid.lower() for k in ("vision", "-vl", "gemini", "gemma-3", "pixtral", "internvl"))
+                )
+
+                if supports_image and not has_vision:
+                    continue
+
+                # Score models dynamically based on family reliability and context window
+                score = 0
+                mid_lower = mid.lower()
+                if "gemini" in mid_lower or "gemma" in mid_lower:
+                    score += 50
+                elif "qwen" in mid_lower:
+                    score += 40
+                elif "llama" in mid_lower or "mistral" in mid_lower or "pixtral" in mid_lower:
+                    score += 30
+                context_len = int(m.get("context_length") or 0)
+                score += min(context_len // 8192, 20)
+
+                scored_models.append((score, mid))
     except Exception:
         pass
-    return "google/gemini-2.0-flash-lite-001:free" if supports_image else "meta-llama/llama-3.2-11b-vision-instruct:free"
 
-def call_openrouter_with_retry(api_key, messages, max_tokens=2048, supports_image=False):
+    scored_models.sort(key=lambda x: x[0], reverse=True)
+    discovered = [mid for _, mid in scored_models]
+
+    # Always append OpenRouter's native free router as a final fallback
+    if "openrouter/free" not in discovered:
+        discovered.append("openrouter/free")
+
+    return discovered
+
+def call_openrouter_with_retry(api_key: str, messages: list, max_tokens: int = 2048, supports_image: bool = False):
+    """Automatically iterates through discovered available OpenRouter models until one succeeds."""
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://civicclear-ai.streamlit.app",
         "X-Title": "CivicClear AI"
     }
-    best_model = get_best_openrouter_model(api_key, supports_image=supports_image)
-    models_to_try = [best_model, "google/gemini-2.0-flash-lite-001:free", "google/gemini-flash-1.5:free"]
-    
-    for model in models_to_try:
-        if not model: continue
+    models_to_try = get_available_openrouter_models(api_key, supports_image=supports_image)
+    last_err = None
+
+    for model in models_to_try[:8]:  # Try up to 8 live discovered models before giving up
         try:
             payload = {"model": model, "max_tokens": max_tokens, "messages": messages}
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(payload), timeout=15)
+            r = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
             if r.status_code == 200:
                 res_data = r.json()
-                if 'choices' in res_data and len(res_data['choices']) > 0:
-                    content = res_data['choices'][0]['message']['content']
+                choices = res_data.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
                     if content and len(content.strip()) > 5:
-                        return content, model
-        except Exception:
+                        return content, model, None
+                if "error" in res_data:
+                    last_err = f"{model}: {res_data['error']}"
+            else:
+                last_err = f"{model}: HTTP {r.status_code} - {r.text[:180]}"
+        except Exception as e:
+            last_err = f"{model}: {e}"
             continue
-    return None, None
+
+    return None, None, last_err
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_available_gemini_models(api_key: str) -> list:
+    """Queries Google's Gemini API live and ranks all models that support generateContent."""
+    scored_models = []
+    excluded_keywords = ("tts", "image-generation", "imagen", "embedding", "aqa", "audio", "robotics", "computer-use")
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            models = resp.json().get("models", [])
+            for m in models:
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" not in methods:
+                    continue
+                name = m.get("name", "").replace("models/", "")
+                name_lower = name.lower()
+                if not name_lower.startswith("gemini") or any(k in name_lower for k in excluded_keywords):
+                    continue
+
+                # Rank fast, high-quota Flash models and newer versions highest
+                score = 0
+                if "flash" in name_lower and "lite" not in name_lower:
+                    score += 50
+                elif "flash-lite" in name_lower or "lite" in name_lower:
+                    score += 40
+                elif "pro" in name_lower:
+                    score += 20
+
+                if "2.5" in name_lower or "3." in name_lower:
+                    score += 30
+                elif "2.0" in name_lower:
+                    score += 20
+                elif "latest" in name_lower:
+                    score += 15
+
+                if "exp" in name_lower or "preview" in name_lower:
+                    score -= 10
+
+                scored_models.append((score, name))
+    except Exception:
+        pass
+
+    scored_models.sort(key=lambda x: x[0], reverse=True)
+    discovered = [name for _, name in scored_models]
+    return discovered if discovered else ["gemini-2.5-flash", "gemini-2.0-flash"]
+
+def call_gemini_with_retry(api_key: str, parts: list):
+    """Automatically tries available Gemini models in ranked order until one succeeds."""
+    models_to_try = get_available_gemini_models(api_key)
+    last_err = None
+
+    for m in models_to_try[:6]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+        try:
+            r = requests.post(url, json={"contents": [{"parts": parts}]}, timeout=30)
+            if r.status_code == 200:
+                data = r.json()
+                candidates = data.get("candidates", [])
+                if candidates and "content" in candidates[0]:
+                    res_parts = candidates[0]["content"].get("parts", [])
+                    if res_parts and res_parts[0].get("text", "").strip():
+                        return res_parts[0]["text"], m, None
+            else:
+                last_err = f"{m}: HTTP {r.status_code} - {r.text[:180]}"
+        except Exception as e:
+            last_err = f"{m}: {e}"
+            continue
+
+    return None, None, last_err
+
+# =========================================================
+# === PROMPTS & PARSING ===
+# =========================================================
 
 def build_ocr_prompt():
     return "Extract ALL text from this document exactly as it is written. Preserve paragraph breaks."
 
 def build_structured_extraction_prompt(raw_text):
-    return f"""From the following raw text of a government notice, extract the following fields:
+    return f"""From the following raw text of a government or institutional notice, extract the following fields:
 1. SUMMARY: A 2-3 sentence summary.
-2. DEADLINE: Main deadline in YYYY-MM-DD format if possible.
+2. DEADLINE: Main deadline in YYYY-MM-DD format if possible (or "Not specified").
 3. CHECKLIST: Every single action step as a numbered list.
 4. NOTE: Any penalty, fee, or warning.
 
 RAW TEXT:
 {raw_text}
 
-Return STRICTLY in this format:
+Return STRICTLY in this plain-text format (do NOT use markdown bolding or hashes on the headers):
 SUMMARY:
 [summary]
 
@@ -330,7 +430,7 @@ NOTE:
 [penalty/warning]"""
 
 def build_translation_prompt(en_structured_text):
-    return f"""Translate the structured notice details from English into formal Hindi. Keep headers SUMMARY:, DEADLINE:, CHECKLIST:, NOTE: exactly in English. Translate content underneath into fluent formal Hindi. Maintain numbered lists.
+    return f"""Translate the structured notice details from English into formal Hindi. Keep headers SUMMARY:, DEADLINE:, CHECKLIST:, NOTE: exactly in English without markdown bolding. Translate content underneath into fluent formal Hindi. Maintain numbered lists.
 
 English Text:
 {en_structured_text}"""
@@ -338,111 +438,138 @@ English Text:
 def clean_text_for_tts(text, lang):
     return re.sub(r'[\#\*\_\~\`\|\<\>]', ' ', text).strip()
 
-def get_available_gemini_models(api_key):
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            models = resp.json().get('models', [])
-            supported = [m.get('name','').replace('models/','') for m in models if 'generateContent' in m.get('supportedGenerationMethods',[])]
-            return [m for m in ["gemini-2.0-flash", "gemini-1.5-flash"] if m in supported] or ["gemini-2.0-flash"]
-    except Exception:
-        pass
-    return ["gemini-2.0-flash"]
+def parse_sections(raw_text):
+    cleaned = re.sub(
+        r'(?m)^[\s\*\#\-]*?(SUMMARY|सारांश|DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी)[\s\*\#]*?:',
+        r'\1:',
+        raw_text,
+        flags=re.IGNORECASE
+    )
+    sm = re.search(r'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    cl = re.search(r'(?:CHECKLIST|कार्यवाही चरण):\s*(.*?)(?=\n(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    nt = re.search(r'(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):\s*(.*?)(?=\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    return sm, dl, cl, nt
 
 # --- CORE ANALYSIS PIPELINE ---
-def analyze_notice():
-    if st.session_state.pil_image is None and st.session_state.pdf_text is None:
-        st.error(L["upload_first"])
-        return
+def analyze_notice() -> bool:
+    has_image = st.session_state.pil_image is not None and st.session_state.img_base64 is not None
+    has_pdf_text = bool(st.session_state.pdf_text and st.session_state.pdf_text.strip())
 
-    openrouter_key = st.session_state.get('or_key', None)
-    gemini_key = st.session_state.get('gm_key', None)
+    if not has_image and not has_pdf_text:
+        st.error(L["upload_first"])
+        return False
+
+    openrouter_key = (st.session_state.get('or_key') or "").strip()
+    gemini_key = (st.session_state.get('gm_key') or "").strip()
     if not openrouter_key and not gemini_key:
         st.error(L["api_warning"])
-        return
+        return False
 
     img_b64 = st.session_state.img_base64
     raw_text = None
+    ocr_model = None
+    ocr_err = None
 
     with st.status(L["analyzing"], expanded=True) as status:
-        status.update(label="Extracting raw text from document...")
-        if openrouter_key:
-            content_payload = [{"type": "text", "text": build_ocr_prompt()}]
-            if st.session_state.pdf_text:
-                content_payload[0]["text"] = f"Extract all text from this PDF:\n\n{st.session_state.pdf_text}"
-            else:
-                content_payload.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
-            raw_text, _ = call_openrouter_with_retry(openrouter_key, [{"role":"user","content": content_payload}], max_tokens=4096, supports_image=True)
+        status.update(label="Step 1/2: Discovering available models & extracting text...")
+        if has_pdf_text:
+            raw_text = st.session_state.pdf_text.strip()
+            st.write("✔️ Extracted text directly from PDF.")
+        else:
+            if openrouter_key:
+                content_payload = [
+                    {"type": "text", "text": build_ocr_prompt()},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                ]
+                raw_text, ocr_model, ocr_err = call_openrouter_with_retry(
+                    openrouter_key,
+                    [{"role": "user", "content": content_payload}],
+                    max_tokens=4096,
+                    supports_image=True
+                )
 
-        if not raw_text and gemini_key:
-            for m in get_available_gemini_models(gemini_key):
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
-                content_parts = [{"text": build_ocr_prompt()}]
-                if st.session_state.pdf_text:
-                    content_parts.insert(0, {"text": f"Extract all text from this PDF:\n\n{st.session_state.pdf_text}"})
-                else:
-                    content_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
-                try:
-                    r = requests.post(url, json={"contents":[{"parts": content_parts}]}, timeout=15)
-                    if r.status_code == 200:
-                        raw_text = r.json()['candidates'][0]['content']['parts'][0]['text']
-                        break
-                except Exception:
-                    pass
+            if not raw_text and gemini_key:
+                content_parts = [
+                    {"text": build_ocr_prompt()},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}}
+                ]
+                raw_text, ocr_model, ocr_err = call_gemini_with_retry(gemini_key, content_parts)
+
+            if raw_text and ocr_model:
+                st.write(f"✔️ OCR completed using `{ocr_model}`")
 
         if not raw_text:
             status.update(label="Failed to extract text.", state="error")
-            st.error("❌ OCR Extraction Failed: Check API keys and network connection.")
-            return
+            st.error(f"❌ OCR Extraction Failed. Details: {ocr_err or 'No available vision models responded.'}")
+            return False
 
-    en_structured = None
-    with st.status("Extracting structured fields...", expanded=True) as status:
+        status.update(label="Step 2/2: Structuring summary, deadline, and action steps...")
+        en_structured = None
+        struct_model = None
+        struct_err = None
+        prompt_text = build_structured_extraction_prompt(raw_text)
+
         if openrouter_key:
-            en_structured, _ = call_openrouter_with_retry(openrouter_key, [{"role":"user","content": build_structured_extraction_prompt(raw_text)}], max_tokens=2048, supports_image=False)
+            en_structured, struct_model, struct_err = call_openrouter_with_retry(
+                openrouter_key,
+                [{"role": "user", "content": prompt_text}],
+                max_tokens=2048,
+                supports_image=False
+            )
         if not en_structured and gemini_key:
-            for m in get_available_gemini_models(gemini_key):
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
-                try:
-                    r = requests.post(url, json={"contents":[{"parts":[{"text": build_structured_extraction_prompt(raw_text)}]}]}, timeout=15)
-                    if r.status_code == 200:
-                        en_structured = r.json()['candidates'][0]['content']['parts'][0]['text']
-                        break
-                except Exception:
-                    pass
+            en_structured, struct_model, struct_err = call_gemini_with_retry(gemini_key, [{"text": prompt_text}])
+
         if not en_structured:
             status.update(label="Structuring failed.", state="error")
-            return
+            st.error(f"❌ Structuring Failed. Details: {struct_err or 'No available text models responded.'}")
+            return False
 
-    final_result = en_structured
-    if en_structured and current_lang == "Hindi":
-        with st.status("Translating to Hindi...", expanded=True) as trans_status:
+        st.write(f"✔️ Structured analysis completed using `{struct_model}`")
+
+        final_result = en_structured
+        if current_lang == "Hindi":
+            status.update(label="Translating to Hindi...")
+            trans_prompt = build_translation_prompt(en_structured)
+            translated = None
+            trans_model = None
             if openrouter_key:
-                final_result, _ = call_openrouter_with_retry(openrouter_key, [{"role":"user","content": build_translation_prompt(en_structured)}], max_tokens=2048, supports_image=False)
+                translated, trans_model, _ = call_openrouter_with_retry(
+                    openrouter_key,
+                    [{"role": "user", "content": trans_prompt}],
+                    max_tokens=2048,
+                    supports_image=False
+                )
+            if not translated and gemini_key:
+                translated, trans_model, _ = call_gemini_with_retry(gemini_key, [{"text": trans_prompt}])
+            if translated:
+                final_result = translated
+                st.write(f"✔️ Translated to Hindi using `{trans_model}`")
 
-    if final_result:
-        st.session_state.raw_result = final_result
-        sm = re.search(r'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
-        dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|टिप्पणी):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
-        nt = re.search(r'(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):\s*(.*?)(?=\Z)', final_result, re.DOTALL|re.IGNORECASE)
-        cl = re.search(r'(?:CHECKLIST|कार्यवाही चरण):\s*(.*?)(?=\n(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि):|\Z)', final_result, re.DOTALL|re.IGNORECASE)
+        status.update(label="Analysis complete!", state="complete")
 
-        summary = sm.group(1).strip() if sm else "No summary available."
-        deadline_text = dl.group(1).strip() if dl else "Not specified"
-        note = nt.group(1).strip() if nt else "None"
-        checklist_raw = cl.group(1).strip() if cl else ""
+    st.session_state.raw_result = final_result
+    sm, dl, cl, nt = parse_sections(final_result)
 
-        items = []
-        for line in checklist_raw.split('\n'):
-            line = line.strip()
-            match = re.match(r'^\s*(?:\d+[\)\.]|\*|\-)\s+(.*)', line)
-            if match:
-                clean = match.group(1).strip()
-                if clean: items.append(clean)
-            elif line and not re.match(r'^(CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि)', line, re.IGNORECASE):
-                items.append(line)
+    summary = sm.group(1).strip() if sm else final_result[:300].strip()
+    deadline_text = dl.group(1).strip() if dl else "Not specified"
+    note = nt.group(1).strip() if nt else "None"
+    checklist_raw = cl.group(1).strip() if cl else ""
 
-        st.session_state.checklist_items = items
+    items = []
+    for line in checklist_raw.split('\n'):
+        line = line.strip()
+        match = re.match(r'^\s*(?:\d+[\)\.]|\*|\-)\s+(.*)', line)
+        if match:
+            clean = match.group(1).strip()
+            if clean:
+                items.append(clean)
+        elif line and not re.match(r'^(CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि)', line, re.IGNORECASE):
+            items.append(line)
+
+    st.session_state.checklist_items = items
+
+    try:
         parsed = db.parse_deadline_date(deadline_text)
         db.save_notice(
             title=f"Notice ({date.today().isoformat()})",
@@ -451,17 +578,26 @@ def analyze_notice():
             raw_result=en_structured
         )
         st.success(L["save_success"])
+    except Exception as db_err:
+        st.warning(f"Analyzed notice, but cloud save failed: {db_err}")
 
-        try:
-            checklist_text = ". ".join(items)
-            tts_text = f"{summary}. कार्यवाही चरण: {checklist_text}. टिप्पणी: {note}" if current_lang == "Hindi" else f"{summary}. Checklist: {checklist_text}. Note: {note}"
-            tts = gTTS(text=clean_text_for_tts(tts_text, current_lang)[:5000], lang='hi' if current_lang == "Hindi" else 'en', slow=False)
-            tts.save("notice_audio.mp3")
-            with open("notice_audio.mp3", 'rb') as f: st.session_state.audio_bytes = f.read()
-            st.session_state.audio_generated_for_lang = current_lang
-            st.session_state.audio_version += 1
-        except Exception as e:
-            st.error(L["audio_err"].format(e=e))
+    try:
+        checklist_text = ". ".join(items)
+        tts_text = (
+            f"{summary}. कार्यवाही चरण: {checklist_text}. टिप्पणी: {note}"
+            if current_lang == "Hindi"
+            else f"{summary}. Checklist: {checklist_text}. Note: {note}"
+        )
+        tts = gTTS(text=clean_text_for_tts(tts_text, current_lang)[:5000], lang='hi' if current_lang == "Hindi" else 'en', slow=False)
+        audio_fp = io.BytesIO()
+        tts.write_to_fp(audio_fp)
+        st.session_state.audio_bytes = audio_fp.getvalue()
+        st.session_state.audio_generated_for_lang = current_lang
+        st.session_state.audio_version += 1
+    except Exception as e:
+        st.error(L["audio_err"].format(e=e))
+
+    return True
 
 def render_cards(notices, category_key):
     cat_labels = {
@@ -471,7 +607,7 @@ def render_cards(notices, category_key):
         "important": ("Important", "महत्वपूर्ण"),
     }
     cat_display = cat_labels.get(category_key, ("", ""))[1] if current_lang == "Hindi" else cat_labels.get(category_key, ("", ""))[0]
-    badge_map = {"available":"badge-active","expired":"badge-expired","approaching":"badge-approaching","important":"badge-important"}
+    badge_map = {"available": "badge-active", "expired": "badge-expired", "approaching": "badge-approaching", "important": "badge-important"}
     
     if not notices:
         st.info(L["no_notices"].format(category=cat_display))
@@ -527,9 +663,9 @@ tab_analyze, tab_active, tab_approach, tab_expired, tab_imp = st.tabs([
 with tab_analyze:
     if st.session_state.previous_lang != current_lang:
         st.session_state.previous_lang = current_lang
-        if st.session_state.pil_image or st.session_state.pdf_text:
-            analyze_notice()
-            st.rerun()
+        if st.session_state.raw_result and (st.session_state.pil_image or st.session_state.pdf_text):
+            if analyze_notice():
+                st.rerun()
 
     if st.session_state.show_uploader:
         f = st.file_uploader(L["uploader_label"], type=['jpg', 'png', 'jpeg', 'pdf'])
@@ -537,28 +673,40 @@ with tab_analyze:
             with st.status(L["processing"], expanded=True) as stt:
                 try:
                     if f.type == "application/pdf":
+                        pdf_bytes = f.read()
+                        extracted_pdf_text = ""
+                        try:
+                            from pypdf import PdfReader
+                            reader = PdfReader(io.BytesIO(pdf_bytes))
+                            extracted_pdf_text = "\n".join([p.extract_text() or "" for p in reader.pages]).strip()
+                        except Exception:
+                            pass
+
                         try:
                             import fitz
-                            doc = fitz.open(stream=f.read(), filetype="pdf")
-                            pix = doc.load_page(0).get_pixmap()
+                            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                            pix = doc.load_page(0).get_pixmap(dpi=150)
                             st.session_state.pil_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                            st.session_state.pdf_text = None
                         except Exception:
-                            from pypdf import PdfReader
-                            f.seek(0)
-                            reader = PdfReader(f)
                             st.session_state.pil_image = None
-                            st.session_state.pdf_text = "".join([p.extract_text() or "" for p in reader.pages])
+
+                        st.session_state.pdf_text = extracted_pdf_text if extracted_pdf_text else None
+
+                        if not st.session_state.pil_image and not st.session_state.pdf_text:
+                            stt.update(label="Scanned PDF requires PyMuPDF (`pip install pymupdf`) or an image upload.", state="error")
+                            st.stop()
                     else:
                         f.seek(0)
-                        st.session_state.pil_image = Image.open(f)
+                        st.session_state.pil_image = Image.open(f).copy()
                         st.session_state.pdf_text = None
 
                     if st.session_state.pil_image:
-                        img = st.session_state.pil_image
-                        img.thumbnail((512, 512))
-                        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-                        buf = io.BytesIO(); img.save(buf, format="JPEG")
+                        img = st.session_state.pil_image.copy()
+                        img.thumbnail((1024, 1024))
+                        if img.mode in ("RGBA", "P"):
+                            img = img.convert("RGB")
+                        buf = io.BytesIO()
+                        img.save(buf, format="JPEG", quality=85)
                         st.session_state.img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
 
                     st.session_state.show_uploader = False
@@ -570,23 +718,36 @@ with tab_analyze:
         with col_prev:
             if st.session_state.pil_image:
                 st.image(st.session_state.pil_image, width=300, caption="Preview")
+            elif st.session_state.pdf_text:
+                st.info(f"📄 PDF loaded ({len(st.session_state.pdf_text)} characters extracted)")
             if st.button(L["btn_upload_new"], use_container_width=True):
-                st.session_state.update(show_uploader=True, pil_image=None, img_base64=None, raw_result=None, checklist_items=[], audio_bytes=None, pdf_text=None)
+                st.session_state.update(
+                    show_uploader=True,
+                    pil_image=None,
+                    img_base64=None,
+                    raw_result=None,
+                    checklist_items=[],
+                    audio_bytes=None,
+                    pdf_text=None
+                )
                 st.rerun()
         with col_btn:
-            if st.button(L["btn_analyze"] if not st.session_state.raw_result else L["btn_analyze"] + " (Re-analyze)", use_container_width=True, type="primary"):
-                analyze_notice()
-                st.rerun()
+            btn_label = L["btn_analyze"] if not st.session_state.raw_result else L["btn_analyze"] + " (Re-analyze)"
+            if st.button(btn_label, use_container_width=True, type="primary"):
+                if analyze_notice():
+                    st.rerun()
 
     if st.session_state.raw_result:
         raw_result = st.session_state.raw_result
-        sm = re.search(r'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण):|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
-        dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|टिप्पणी):|\Z)', raw_result, re.DOTALL|re.IGNORECASE)
-        nt = re.search(r'(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):\s*(.*?)(?=\Z)', raw_result, re.DOTALL|re.IGNORECASE)
+        sm, dl, cl, nt = parse_sections(raw_result)
 
         st.markdown(f"### {L['summary_header']}")
         st.info(sm.group(1).strip() if sm else raw_result[:300])
-        st.metric(label=L['deadline_header'], value=translate_date_to_hindi(dl.group(1).strip()) if current_lang == "Hindi" else (dl.group(1).strip() if dl else "Not specified"))
+        deadline_val = dl.group(1).strip() if dl else "Not specified"
+        st.metric(
+            label=L['deadline_header'],
+            value=translate_date_to_hindi(deadline_val) if current_lang == "Hindi" else deadline_val
+        )
         
         st.markdown("---")
         st.markdown(f"### {L['checklist_header']}")
