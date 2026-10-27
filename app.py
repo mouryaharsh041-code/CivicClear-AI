@@ -8,9 +8,7 @@ from PIL import Image
 from gtts import gTTS
 import requests
 from datetime import date
-
 import db  # Our Supabase-backed database module
-
 # --- PAGE CONFIG & THEME LOCK ---
 st.set_page_config(
     page_title="CivicClear AI | SaralNotice",
@@ -18,19 +16,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
 try:
     st.config_set('theme.base', 'light')
 except Exception:
     pass
-
 # --- AUTHENTICATION SESSION STATE ---
 if "user" not in st.session_state: st.session_state["user"] = None
 if "access_token" not in st.session_state: st.session_state["access_token"] = None
 if "refresh_token" not in st.session_state: st.session_state["refresh_token"] = None
-
 supabase_client = db.get_base_supabase()
-
 # --- LOGIN / SIGNUP SCREEN GATE ---
 if st.session_state["user"] is None:
     st.title("🔐 CivicClear AI - Multi-User Login")
@@ -51,7 +45,6 @@ if st.session_state["user"] is None:
                 st.rerun()
             except Exception as e:
                 st.error(f"Login failed: {e}")
-
     with auth_tab2:
         new_email = st.text_input("Email", key="signup_email")
         new_pass = st.text_input("Password", type="password", key="signup_pass")
@@ -63,7 +56,6 @@ if st.session_state["user"] is None:
                 st.error(f"Registration failed: {e}")
                 
     st.stop()
-
 # =========================================================
 # === BILINGUAL UI STRINGS ===
 # =========================================================
@@ -86,6 +78,10 @@ EN = {
     "btn_analyze": "🚀 Analyze Notice",
     "summary_header": "Summary",
     "deadline_header": "Deadline",
+    "eligibility_header": "🎯 Is this for you?",
+    "eligibility_instruction": "Check all the boxes that apply to you to see if you need to take action:",
+    "is_for_you_yes": "✅ **Yes, this notice is for you!** Please complete the action steps below.",
+    "is_for_you_no": "❌ **This notice is not for you** (Check all matching criteria above if it applies to you).",
     "note_header": "Important Note",
     "checklist_header": "Action Steps",
     "completed_text": "**{done} of {total} tasks completed**",
@@ -102,7 +98,6 @@ EN = {
     "audio_err": "Audio generation error: {e}",
     "no_deadline": "No deadline mentioned",
 }
-
 HI = {
     "title": "🏛️ सिविक क्लियर एआई | सरल नोटिस",
     "sidebar_lang": "भाषा",
@@ -122,6 +117,10 @@ HI = {
     "btn_analyze": "🚀 नोटिस का विश्लेषण करें",
     "summary_header": "सारांश",
     "deadline_header": "अंतिम तिथि",
+    "eligibility_header": "🎯 क्या यह नोटिस आपके लिए है?",
+    "eligibility_instruction": "यह जानने के लिए कि क्या यह नोटिस आपके लिए है, नीचे दिए गए सभी लागू बॉक्सों को चुनें:",
+    "is_for_you_yes": "✅ **हाँ, यह नोटिस आपके लिए है!** कृपया नीचे दिए गए कार्यवाही चरणों को पूरा करें।",
+    "is_for_you_no": "❌ **यह नोटिस आपके लिए नहीं है** (यदि यह आप पर लागू होता है, तो ऊपर दिए गए सभी बॉक्स चुनें)।",
     "note_header": "महत्वपूर्ण टिप्पणी",
     "checklist_header": "कार्यवाही चरण",
     "completed_text": "**{total} में से {done} कार्य पूर्ण हुए**",
@@ -138,7 +137,6 @@ HI = {
     "audio_err": "ऑडियो जनरेशन त्रुटि: {e}",
     "no_deadline": "कोई अंतिम तिथि नहीं",
 }
-
 # =========================================================
 # === LANGUAGE SYNC ===
 # =========================================================
@@ -146,7 +144,6 @@ if "lang_sb" in st.session_state:
     st.session_state.current_lang = st.session_state["lang_sb"]
 current_lang = st.session_state.get("current_lang", "English")
 L = HI if current_lang == "Hindi" else EN
-
 LOGO_HTML = """
 <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 2.5rem; margin-top: 1rem;">
     <div style="background-color: #FF6B6B; width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 107, 107, 0.25);">
@@ -166,7 +163,6 @@ LOGO_HTML = """
     </div>
 </div>
 """
-
 st.markdown("""
     <style>
     html, body, [data-testid="stApp"], [data-testid="stHeader"], .stSidebar {
@@ -202,11 +198,11 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
 # --- SESSION STATE ---
 if 'pil_image' not in st.session_state: st.session_state.pil_image = None
 if 'img_base64' not in st.session_state: st.session_state.img_base64 = None
 if 'raw_result' not in st.session_state: st.session_state.raw_result = None
+if 'eligibility_items' not in st.session_state: st.session_state.eligibility_items = []
 if 'checklist_items' not in st.session_state: st.session_state.checklist_items = []
 if 'audio_bytes' not in st.session_state: st.session_state.audio_bytes = None
 if 'show_uploader' not in st.session_state: st.session_state.show_uploader = True
@@ -214,7 +210,7 @@ if 'audio_generated_for_lang' not in st.session_state: st.session_state.audio_ge
 if 'audio_version' not in st.session_state: st.session_state.audio_version = 0
 if 'pdf_text' not in st.session_state: st.session_state.pdf_text = None
 if 'previous_lang' not in st.session_state: st.session_state.previous_lang = current_lang
-
+if 'analysis_run_id' not in st.session_state: st.session_state.analysis_run_id = 0
 def translate_date_to_hindi(date_str):
     if not date_str or date_str.lower() == "not specified":
         return L["no_deadline"]
@@ -227,11 +223,9 @@ def translate_date_to_hindi(date_str):
         return f"{d.day} {months_hi[d.month - 1]} {d.year}"
     except Exception:
         return date_str
-
 # =========================================================
 # === DYNAMIC MODEL DISCOVERY & AUTO-FAILOVER ===
 # =========================================================
-
 @st.cache_data(ttl=600, show_spinner=False)
 def get_available_openrouter_models(api_key: str, supports_image: bool = False) -> list:
     """Queries OpenRouter live to discover all currently available free models."""
@@ -250,10 +244,8 @@ def get_available_openrouter_models(api_key: str, supports_image: bool = False) 
                     is_free = float(pricing.get("prompt", 1)) == 0.0 and float(pricing.get("completion", 1)) == 0.0
                 except (ValueError, TypeError):
                     is_free = mid.endswith(":free")
-
                 if not is_free:
                     continue
-
                 arch = m.get("architecture", {})
                 input_mods = arch.get("input_modalities", []) or arch.get("modalities", [])
                 modality_str = str(arch.get("modality", "")).lower()
@@ -262,11 +254,8 @@ def get_available_openrouter_models(api_key: str, supports_image: bool = False) 
                     or "image" in modality_str
                     or any(k in mid.lower() for k in ("vision", "-vl", "gemini", "gemma-3", "pixtral", "internvl"))
                 )
-
                 if supports_image and not has_vision:
                     continue
-
-                # Score models dynamically based on family reliability and context window
                 score = 0
                 mid_lower = mid.lower()
                 if "gemini" in mid_lower or "gemma" in mid_lower:
@@ -277,20 +266,14 @@ def get_available_openrouter_models(api_key: str, supports_image: bool = False) 
                     score += 30
                 context_len = int(m.get("context_length") or 0)
                 score += min(context_len // 8192, 20)
-
                 scored_models.append((score, mid))
     except Exception:
         pass
-
     scored_models.sort(key=lambda x: x[0], reverse=True)
     discovered = [mid for _, mid in scored_models]
-
-    # Always append OpenRouter's native free router as a final fallback
     if "openrouter/free" not in discovered:
         discovered.append("openrouter/free")
-
     return discovered
-
 def call_openrouter_with_retry(api_key: str, messages: list, max_tokens: int = 2048, supports_image: bool = False):
     """Automatically iterates through discovered available OpenRouter models until one succeeds."""
     headers = {
@@ -301,8 +284,7 @@ def call_openrouter_with_retry(api_key: str, messages: list, max_tokens: int = 2
     }
     models_to_try = get_available_openrouter_models(api_key, supports_image=supports_image)
     last_err = None
-
-    for model in models_to_try[:8]:  # Try up to 8 live discovered models before giving up
+    for model in models_to_try[:8]:
         try:
             payload = {"model": model, "max_tokens": max_tokens, "messages": messages}
             r = requests.post(
@@ -325,9 +307,7 @@ def call_openrouter_with_retry(api_key: str, messages: list, max_tokens: int = 2
         except Exception as e:
             last_err = f"{model}: {e}"
             continue
-
     return None, None, last_err
-
 @st.cache_data(ttl=600, show_spinner=False)
 def get_available_gemini_models(api_key: str) -> list:
     """Queries Google's Gemini API live and ranks all models that support generateContent."""
@@ -346,8 +326,6 @@ def get_available_gemini_models(api_key: str) -> list:
                 name_lower = name.lower()
                 if not name_lower.startswith("gemini") or any(k in name_lower for k in excluded_keywords):
                     continue
-
-                # Rank fast, high-quota Flash models and newer versions highest
                 score = 0
                 if "flash" in name_lower and "lite" not in name_lower:
                     score += 50
@@ -355,30 +333,24 @@ def get_available_gemini_models(api_key: str) -> list:
                     score += 40
                 elif "pro" in name_lower:
                     score += 20
-
                 if "2.5" in name_lower or "3." in name_lower:
                     score += 30
                 elif "2.0" in name_lower:
                     score += 20
                 elif "latest" in name_lower:
                     score += 15
-
                 if "exp" in name_lower or "preview" in name_lower:
                     score -= 10
-
                 scored_models.append((score, name))
     except Exception:
         pass
-
     scored_models.sort(key=lambda x: x[0], reverse=True)
     discovered = [name for _, name in scored_models]
     return discovered if discovered else ["gemini-2.5-flash", "gemini-2.0-flash"]
-
 def call_gemini_with_retry(api_key: str, parts: list):
     """Automatically tries available Gemini models in ranked order until one succeeds."""
     models_to_try = get_available_gemini_models(api_key)
     last_err = None
-
     for m in models_to_try[:6]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
         try:
@@ -395,82 +367,86 @@ def call_gemini_with_retry(api_key: str, parts: list):
         except Exception as e:
             last_err = f"{m}: {e}"
             continue
-
     return None, None, last_err
-
 # =========================================================
 # === PROMPTS & PARSING ===
 # =========================================================
-
 def build_ocr_prompt():
     return "Extract ALL text from this document exactly as it is written. Preserve paragraph breaks."
-
 def build_structured_extraction_prompt(raw_text):
     return f"""From the following raw text of a government or institutional notice, extract the following fields:
 1. SUMMARY: A 2-3 sentence summary.
 2. DEADLINE: Main deadline in YYYY-MM-DD format if possible (or "Not specified").
-3. CHECKLIST: Every single action step as a numbered list.
-4. NOTE: Any penalty, fee, or warning.
-
+3. ELIGIBILITY: Identify the exact target audience of this notice (e.g., specific university/organization, specific course/branch/department like B.Sc/B.Tech, specific semester/year like Odd/Even/1st year, specific student/citizen category like backlog/regular/scholarship). Write 2 to 4 simple Yes/No verification questions starting with "Are you..." so the reader can check if this notice applies to them.
+4. CHECKLIST: Every single action step required from the eligible person as a numbered list.
+5. NOTE: Any penalty, fee, or warning.
 RAW TEXT:
 {raw_text}
-
 Return STRICTLY in this plain-text format (do NOT use markdown bolding or hashes on the headers):
 SUMMARY:
 [summary]
-
 DEADLINE:
 [date]
-
+ELIGIBILITY:
+1. [Question 1, e.g., Are you a student of XYZ University?]
+2. [Question 2, e.g., Are you enrolled in the B.Sc program?]
+3. [Question 3, e.g., Are you currently in an Odd Semester with a backlog?]
 CHECKLIST:
 1. [step 1]
 2. [step 2]
-
 NOTE:
 [penalty/warning]"""
-
 def build_translation_prompt(en_structured_text):
-    return f"""Translate the structured notice details from English into formal Hindi. Keep headers SUMMARY:, DEADLINE:, CHECKLIST:, NOTE: exactly in English without markdown bolding. Translate content underneath into fluent formal Hindi. Maintain numbered lists.
-
+    return f"""Translate the structured notice details from English into formal Hindi. Keep headers SUMMARY:, DEADLINE:, ELIGIBILITY:, CHECKLIST:, NOTE: exactly in English without markdown bolding. Translate the content underneath into fluent formal Hindi. Maintain numbered lists.
 English Text:
 {en_structured_text}"""
-
 def clean_text_for_tts(text, lang):
     return re.sub(r'[\#\*\_\~\`\|\<\>]', ' ', text).strip()
-
 def parse_sections(raw_text):
     cleaned = re.sub(
-        r'(?m)^[\s\*\#\-]*?(SUMMARY|सारांश|DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी)[\s\*\#]*?:',
+        r'(?m)^[\s\*\#\-]*?(SUMMARY|सारांश|DEADLINE|अंतिम तिथि|ELIGIBILITY|पात्रता|CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी)[\s\*\#]*?:',
         r'\1:',
         raw_text,
         flags=re.IGNORECASE
     )
-    sm = re.search(r'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:DEADLINE|अंतिम तिथि|CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
-    dl = re.search(r'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
-    cl = re.search(r'(?:CHECKLIST|कार्यवाही चरण):\s*(.*?)(?=\n(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    all_headers = r'SUMMARY|सारांश|DEADLINE|अंतिम तिथि|ELIGIBILITY|पात्रता|CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी'
+    sm = re.search(rf'(?:SUMMARY|सारांश):\s*(.*?)(?=\n(?:{all_headers}):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    dl = re.search(rf'(?:DEADLINE|अंतिम तिथि):\s*(.*?)(?=\n(?:{all_headers}):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    el = re.search(rf'(?:ELIGIBILITY|पात्रता):\s*(.*?)(?=\n(?:{all_headers}):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
+    cl = re.search(rf'(?:CHECKLIST|कार्यवाही चरण):\s*(.*?)(?=\n(?:{all_headers}):|\Z)', cleaned, re.DOTALL | re.IGNORECASE)
     nt = re.search(r'(?:NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी):\s*(.*?)(?=\Z)', cleaned, re.DOTALL | re.IGNORECASE)
-    return sm, dl, cl, nt
-
+    return sm, dl, el, cl, nt
+def extract_list_items(raw_block):
+    items = []
+    if not raw_block:
+        return items
+    header_pattern = r'^(CHECKLIST|कार्यवाही चरण|ELIGIBILITY|पात्रता|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि)'
+    for line in raw_block.split('\n'):
+        line = line.strip()
+        match = re.match(r'^\s*(?:\d+[\)\.]|\*|\-)\s+(.*)', line)
+        if match:
+            clean = match.group(1).strip()
+            if clean:
+                items.append(clean)
+        elif line and not re.match(header_pattern, line, re.IGNORECASE):
+            items.append(line)
+    return items
 # --- CORE ANALYSIS PIPELINE ---
 def analyze_notice() -> bool:
     has_image = st.session_state.pil_image is not None and st.session_state.img_base64 is not None
     has_pdf_text = bool(st.session_state.pdf_text and st.session_state.pdf_text.strip())
-
     if not has_image and not has_pdf_text:
         st.error(L["upload_first"])
         return False
-
     openrouter_key = (st.session_state.get('or_key') or "").strip()
     gemini_key = (st.session_state.get('gm_key') or "").strip()
     if not openrouter_key and not gemini_key:
         st.error(L["api_warning"])
         return False
-
     img_b64 = st.session_state.img_base64
     raw_text = None
     ocr_model = None
     ocr_err = None
-
     with st.status(L["analyzing"], expanded=True) as status:
         status.update(label="Step 1/2: Discovering available models & extracting text...")
         if has_pdf_text:
@@ -488,28 +464,23 @@ def analyze_notice() -> bool:
                     max_tokens=4096,
                     supports_image=True
                 )
-
             if not raw_text and gemini_key:
                 content_parts = [
                     {"text": build_ocr_prompt()},
                     {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}}
                 ]
                 raw_text, ocr_model, ocr_err = call_gemini_with_retry(gemini_key, content_parts)
-
             if raw_text and ocr_model:
                 st.write(f"✔️ OCR completed using `{ocr_model}`")
-
         if not raw_text:
             status.update(label="Failed to extract text.", state="error")
             st.error(f"❌ OCR Extraction Failed. Details: {ocr_err or 'No available vision models responded.'}")
             return False
-
-        status.update(label="Step 2/2: Structuring summary, deadline, and action steps...")
+        status.update(label="Step 2/2: Structuring summary, eligibility, deadline, and action steps...")
         en_structured = None
         struct_model = None
         struct_err = None
         prompt_text = build_structured_extraction_prompt(raw_text)
-
         if openrouter_key:
             en_structured, struct_model, struct_err = call_openrouter_with_retry(
                 openrouter_key,
@@ -519,14 +490,11 @@ def analyze_notice() -> bool:
             )
         if not en_structured and gemini_key:
             en_structured, struct_model, struct_err = call_gemini_with_retry(gemini_key, [{"text": prompt_text}])
-
         if not en_structured:
             status.update(label="Structuring failed.", state="error")
             st.error(f"❌ Structuring Failed. Details: {struct_err or 'No available text models responded.'}")
             return False
-
         st.write(f"✔️ Structured analysis completed using `{struct_model}`")
-
         final_result = en_structured
         if current_lang == "Hindi":
             status.update(label="Translating to Hindi...")
@@ -545,30 +513,25 @@ def analyze_notice() -> bool:
             if translated:
                 final_result = translated
                 st.write(f"✔️ Translated to Hindi using `{trans_model}`")
-
         status.update(label="Analysis complete!", state="complete")
-
     st.session_state.raw_result = final_result
-    sm, dl, cl, nt = parse_sections(final_result)
-
+    st.session_state.analysis_run_id += 1
+    sm, dl, el, cl, nt = parse_sections(final_result)
     summary = sm.group(1).strip() if sm else final_result[:300].strip()
     deadline_text = dl.group(1).strip() if dl else "Not specified"
     note = nt.group(1).strip() if nt else "None"
+    eligibility_raw = el.group(1).strip() if el else ""
     checklist_raw = cl.group(1).strip() if cl else ""
-
-    items = []
-    for line in checklist_raw.split('\n'):
-        line = line.strip()
-        match = re.match(r'^\s*(?:\d+[\)\.]|\*|\-)\s+(.*)', line)
-        if match:
-            clean = match.group(1).strip()
-            if clean:
-                items.append(clean)
-        elif line and not re.match(r'^(CHECKLIST|कार्यवाही चरण|NOTE|महत्वपूर्ण टिप्पणी|टिप्पणी|SUMMARY|सारांश|DEADLINE|अंतिम तिथि)', line, re.IGNORECASE):
-            items.append(line)
-
+    elig_items = extract_list_items(eligibility_raw)
+    if not elig_items:
+        elig_items = [
+            "क्या आप इस नोटिस में उल्लिखित संस्थान या श्रेणी से संबंधित हैं?"
+            if current_lang == "Hindi"
+            else "Do you belong to the institution, department, or category mentioned in this notice?"
+        ]
+    st.session_state.eligibility_items = elig_items
+    items = extract_list_items(checklist_raw)
     st.session_state.checklist_items = items
-
     try:
         parsed = db.parse_deadline_date(deadline_text)
         db.save_notice(
@@ -580,7 +543,6 @@ def analyze_notice() -> bool:
         st.success(L["save_success"])
     except Exception as db_err:
         st.warning(f"Analyzed notice, but cloud save failed: {db_err}")
-
     try:
         checklist_text = ". ".join(items)
         tts_text = (
@@ -596,9 +558,7 @@ def analyze_notice() -> bool:
         st.session_state.audio_version += 1
     except Exception as e:
         st.error(L["audio_err"].format(e=e))
-
     return True
-
 def render_cards(notices, category_key):
     cat_labels = {
         "available": ("Active / Available", "सक्रिय / उपलब्ध"),
@@ -634,7 +594,6 @@ def render_cards(notices, category_key):
                 st.success("Notice deleted!")
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-
 # --- SIDEBAR AUTH & CONTROLS ---
 with st.sidebar:
     st.markdown(LOGO_HTML, unsafe_allow_html=True)
@@ -654,19 +613,16 @@ with st.sidebar:
     st.text_input(L["key_gemini"], type="password", key="gm_key")
     st.markdown("---")
     st.caption(L["cap_single"])
-
 # --- MAIN TABS ---
 tab_analyze, tab_active, tab_approach, tab_expired, tab_imp = st.tabs([
     L["tab_analyze"], L["tab_active"], L["tab_approach"], L["tab_expired"], L["tab_important"]
 ])
-
 with tab_analyze:
     if st.session_state.previous_lang != current_lang:
         st.session_state.previous_lang = current_lang
         if st.session_state.raw_result and (st.session_state.pil_image or st.session_state.pdf_text):
             if analyze_notice():
                 st.rerun()
-
     if st.session_state.show_uploader:
         f = st.file_uploader(L["uploader_label"], type=['jpg', 'png', 'jpeg', 'pdf'])
         if f:
@@ -681,7 +637,6 @@ with tab_analyze:
                             extracted_pdf_text = "\n".join([p.extract_text() or "" for p in reader.pages]).strip()
                         except Exception:
                             pass
-
                         try:
                             import fitz
                             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -689,9 +644,7 @@ with tab_analyze:
                             st.session_state.pil_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                         except Exception:
                             st.session_state.pil_image = None
-
                         st.session_state.pdf_text = extracted_pdf_text if extracted_pdf_text else None
-
                         if not st.session_state.pil_image and not st.session_state.pdf_text:
                             stt.update(label="Scanned PDF requires PyMuPDF (`pip install pymupdf`) or an image upload.", state="error")
                             st.stop()
@@ -699,7 +652,6 @@ with tab_analyze:
                         f.seek(0)
                         st.session_state.pil_image = Image.open(f).copy()
                         st.session_state.pdf_text = None
-
                     if st.session_state.pil_image:
                         img = st.session_state.pil_image.copy()
                         img.thumbnail((1024, 1024))
@@ -708,7 +660,6 @@ with tab_analyze:
                         buf = io.BytesIO()
                         img.save(buf, format="JPEG", quality=85)
                         st.session_state.img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-
                     st.session_state.show_uploader = False
                     st.rerun()
                 except Exception as e:
@@ -726,6 +677,7 @@ with tab_analyze:
                     pil_image=None,
                     img_base64=None,
                     raw_result=None,
+                    eligibility_items=[],
                     checklist_items=[],
                     audio_bytes=None,
                     pdf_text=None
@@ -736,11 +688,10 @@ with tab_analyze:
             if st.button(btn_label, use_container_width=True, type="primary"):
                 if analyze_notice():
                     st.rerun()
-
     if st.session_state.raw_result:
         raw_result = st.session_state.raw_result
-        sm, dl, cl, nt = parse_sections(raw_result)
-
+        sm, dl, el, cl, nt = parse_sections(raw_result)
+        run_id = st.session_state.analysis_run_id
         st.markdown(f"### {L['summary_header']}")
         st.info(sm.group(1).strip() if sm else raw_result[:300])
         deadline_val = dl.group(1).strip() if dl else "Not specified"
@@ -749,34 +700,51 @@ with tab_analyze:
             value=translate_date_to_hindi(deadline_val) if current_lang == "Hindi" else deadline_val
         )
         
+        # --- NEW SECTION: IS THIS FOR YOU? (ELIGIBILITY CHECKLIST) ---
         st.markdown("---")
-        st.markdown(f"### {L['checklist_header']}")
-        completed_count = sum([1 for idx, task in enumerate(st.session_state.checklist_items) if st.checkbox(task, key=f"task_{idx}")])
-        if st.session_state.checklist_items:
-            st.markdown(L['completed_text'].format(done=completed_count, total=len(st.session_state.checklist_items)))
-            st.progress(completed_count / len(st.session_state.checklist_items))
-
-        st.markdown("---")
-        st.markdown(f"### {L['note_header']}")
-        st.warning(nt.group(1).strip() if nt else "No specific warnings noted.")
-
-        if st.session_state.audio_bytes and st.session_state.audio_generated_for_lang == current_lang:
-            st.markdown(f"#### {L['audio_label']}")
-            ab64 = base64.b64encode(st.session_state.audio_bytes).decode()
-            st.components.v1.html(f'<audio controls style="width: 100%;"><source src="data:audio/mp3;base64,{ab64}" type="audio/mp3"></audio>', height=80)
-
+        st.markdown(f"### {L['eligibility_header']}")
+        st.caption(L["eligibility_instruction"])
+        
+        elig_checked_count = sum([
+            1 for idx, question in enumerate(st.session_state.eligibility_items)
+            if st.checkbox(question, key=f"elig_{run_id}_{idx}")
+        ])
+        
+        all_elig_checked = (
+            len(st.session_state.eligibility_items) > 0
+            and elig_checked_count == len(st.session_state.eligibility_items)
+        )
+        if all_elig_checked:
+            st.success(L["is_for_you_yes"])
+            
+            # --- ACTION STEPS CHECKLIST (Revealed only when all eligibility boxes are checked) ---
+            st.markdown("---")
+            st.markdown(f"### {L['checklist_header']}")
+            completed_count = sum([
+                1 for idx, task in enumerate(st.session_state.checklist_items)
+                if st.checkbox(task, key=f"task_{run_id}_{idx}")
+            ])
+            if st.session_state.checklist_items:
+                st.markdown(L['completed_text'].format(done=completed_count, total=len(st.session_state.checklist_items)))
+                st.progress(completed_count / len(st.session_state.checklist_items))
+            st.markdown("---")
+            st.markdown(f"### {L['note_header']}")
+            st.warning(nt.group(1).strip() if nt else "No specific warnings noted.")
+            if st.session_state.audio_bytes and st.session_state.audio_generated_for_lang == current_lang:
+                st.markdown(f"#### {L['audio_label']}")
+                ab64 = base64.b64encode(st.session_state.audio_bytes).decode()
+                st.components.v1.html(f'<audio controls style="width: 100%;"><source src="data:audio/mp3;base64,{ab64}" type="audio/mp3"></audio>', height=80)
+        else:
+            st.warning(L["is_for_you_no"])
 with tab_active:
     st.markdown(f"### {L['tab_active']}")
     render_cards(db.get_active_notices(), "available")
-
 with tab_approach:
     st.markdown(f"### {L['tab_approach']}")
     render_cards(db.get_approaching_notices(), "approaching")
-
 with tab_expired:
     st.markdown(f"### {L['tab_expired']}")
     render_cards(db.get_expired_notices(), "expired")
-
 with tab_imp:
     st.markdown(f"### {L['tab_important']}")
     render_cards(db.get_important_notices(), "important")
