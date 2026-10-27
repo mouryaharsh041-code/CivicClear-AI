@@ -1,7 +1,7 @@
 streamlit
-groq
+supabase
 gTTS
 Pillow
-pymupdf
-pypdf
 requests
+PyMuPDF
+pypdf
