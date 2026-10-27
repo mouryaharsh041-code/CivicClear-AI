@@ -1,36 +1,29 @@
-import sqlite3
+import streamlit as st
+from supabase import create_client, Client
 from datetime import date, datetime
 
-DB_FILE = "notices.db"
+@st.cache_resource
+def get_base_supabase() -> Client:
+    url = st.secrets["SUPABASE"]["SUPABASE_URL"]
+    key = st.secrets["SUPABASE"]["SUPABASE_KEY"]
+    return create_client(url, key)
 
-def get_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+_supabase = get_base_supabase()
 
-def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS notices (
-            notice_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            summary TEXT,
-            deadline_date TEXT,
-            raw_result TEXT,
-            is_important INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-# Initialize database on import
-init_db()
+def get_supabase_client() -> Client:
+    """Injects the active session token for Row Level Security (RLS)."""
+    if st.session_state.get("access_token"):
+        try:
+            _supabase.auth.set_session(
+                st.session_state["access_token"], 
+                st.session_state.get("refresh_token", "")
+            )
+        except Exception:
+            pass
+    return _supabase
 
 def parse_deadline_date(date_str):
-    if not date_str:
+    if not date_str or date_str.lower() == "not specified":
         return None
     try:
         for fmt in ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%B %d, %Y"):
@@ -43,9 +36,11 @@ def parse_deadline_date(date_str):
         return None
 
 def save_notice(title, summary, deadline_date_str, raw_result):
-    conn = get_connection()
-    cursor = conn.cursor()
-    
+    client = get_supabase_client()
+    user = st.session_state.get("user")
+    if not user:
+        return False
+
     status = "active"
     if deadline_date_str:
         try:
@@ -61,63 +56,47 @@ def save_notice(title, summary, deadline_date_str, raw_result):
         except Exception:
             status = "active"
 
-    # Prevent duplicates based on summary
-    cursor.execute("SELECT notice_id FROM notices WHERE summary = ?", (summary,))
-    if cursor.fetchone():
-        conn.close()
+    # Check for duplicate summaries for this user
+    existing = client.table("notices").select("notice_id").eq("summary", summary).eq("user_id", user.id).execute()
+    if existing.data:
         return False
 
-    cursor.execute('''
-        INSERT INTO notices (title, summary, deadline_date, raw_result, status, is_important)
-        VALUES (?, ?, ?, ?, ?, 0)
-    ''', (title, summary, deadline_date_str, raw_result, status))
-    conn.commit()
-    conn.close()
+    client.table("notices").insert({
+        "title": title,
+        "summary": summary,
+        "deadline_date": deadline_date_str,
+        "raw_result": raw_result,
+        "status": status,
+        "is_important": 0,
+        "user_id": user.id
+    }).execute()
     return True
 
 def toggle_important(notice_id, current_status):
+    client = get_supabase_client()
     new_val = 0 if current_status == 1 else 1
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE notices SET is_important = ? WHERE notice_id = ?", (new_val, notice_id))
-    conn.commit()
-    conn.close()
+    client.table("notices").update({"is_important": new_val}).eq("notice_id", notice_id).execute()
 
 def delete_notice(notice_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM notices WHERE notice_id = ?", (notice_id,))
-    conn.commit()
-    conn.close()
+    client = get_supabase_client()
+    client.table("notices").delete().eq("notice_id", notice_id).execute()
 
 def get_active_notices():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM notices WHERE status = 'active' ORDER BY notice_id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    client = get_supabase_client()
+    res = client.table("notices").select("*").eq("status", "active").order("notice_id", desc=True).execute()
+    return res.data if res.data else []
 
 def get_approaching_notices(days_threshold=3):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM notices WHERE status = 'approaching' ORDER BY notice_id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    client = get_supabase_client()
+    res = client.table("notices").select("*").eq("status", "approaching").order("notice_id", desc=True).execute()
+    return res.data if res.data else []
 
 def get_expired_notices():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM notices WHERE status = 'expired' ORDER BY notice_id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    client = get_supabase_client()
+    res = client.table("notices").select("*").eq("status", "expired").order("notice_id", desc=True).execute()
+    return res.data if res.data else []
 
 def get_important_notices():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM notices WHERE is_important = 1 ORDER BY notice_id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    client = get_supabase_client()
+    res = client.table("notices").select("*").eq("is_important", 1).order("notice_id", desc=True).execute()
+    return res.data if res.data else []
